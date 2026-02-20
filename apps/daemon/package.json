@@ -1,0 +1,21 @@
+{
+  "name": "openvide-daemon",
+  "version": "0.1.1",
+  "description": "Persistent session manager for AI CLI tools (Claude Code, Codex, Gemini)",
+  "type": "module",
+  "bin": "./bin/openvide-daemon.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "check": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "LICENSE"
+  ],
+  "license": "MIT"
+}
