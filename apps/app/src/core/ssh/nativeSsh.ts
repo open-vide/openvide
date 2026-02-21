@@ -464,7 +464,18 @@ export class NativeSshClient {
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const session = await this.getOrCreateSession(target, credentials);
       if (session.active && !session.active.finished) {
-        throw new Error("Another command is already running for this target. Send input to it or cancel it first.");
+        console.warn("[OV:ssh] cancelling previous active command to run new one:", session.active.requestId);
+        this.finishCommand(session, session.active, {
+          exitCode: 130,
+          signal: "SIGINT",
+          stdout: session.active.stdout,
+          stderr: session.active.stderr,
+        });
+        // Send Ctrl+C to stop the previous command in the shell
+        try {
+          await this.writeToShellWithRetry(session.client, "\u0003\n");
+          await sleep(100);
+        } catch { /* no-op */ }
       }
 
       let resolveWait: ((result: SshRunResult) => void) | undefined;

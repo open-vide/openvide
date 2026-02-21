@@ -42,7 +42,7 @@ import {
 import { loadState, saveState } from "./storage";
 
 const EMPTY_STATE: PersistedState = {
-  version: 3,
+  version: 4,
   targets: [],
   runs: [],
   readinessByTarget: {},
@@ -50,6 +50,7 @@ const EMPTY_STATE: PersistedState = {
   sessions: [],
   promptTemplates: [],
   promptFlows: [],
+  hiddenBuiltInPromptIds: [],
   autoAcceptTools: false,
   notificationsEnabled: true,
   speechLanguage: "en-US",
@@ -241,6 +242,10 @@ interface AppStoreContextShape {
   updatePromptTemplate: (id: string, updates: Partial<Omit<PromptTemplate, "id" | "isBuiltIn">>) => void;
   deletePromptTemplate: (id: string) => void;
   reorderPromptTemplates: (orderedIds: string[]) => void;
+  hideBuiltInPrompt: (id: string) => void;
+  restoreBuiltInPrompts: () => void;
+  hiddenBuiltInPromptIds: string[];
+  updateSessionAutoAccept: (sessionId: string, autoAccept: boolean) => void;
 }
 
 const AppStoreContext = createContext<AppStoreContextShape | null>(null);
@@ -1131,7 +1136,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
       throw new Error("Target credentials are missing from secure store");
     }
     console.log("[OV:store] sendAiPrompt: dispatching to SessionEngine");
-    await sessionEngineRef.current!.sendPrompt(sessionId, { target, credentials, prompt, autoAccept: stateRef.current.autoAcceptTools });
+    const effectiveAutoAccept = session.autoAccept ?? stateRef.current.autoAcceptTools;
+    await sessionEngineRef.current!.sendPrompt(sessionId, { target, credentials, prompt, autoAccept: effectiveAutoAccept });
     if (session.workspaceId) {
       touchWorkspace(session.workspaceId);
     }
@@ -1308,12 +1314,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     commit((prev) => ({ ...prev, speechLanguage: value }));
   }, [commit]);
 
-  // Merge built-in prompts with user templates
+  // Merge built-in prompts with user templates, filtering hidden ones
+  const hiddenIds = state.hiddenBuiltInPromptIds ?? [];
   const promptTemplates = useMemo(() => {
+    const visibleBuiltIns = BUILT_IN_PROMPTS.filter((t) => !hiddenIds.includes(t.id));
     const userTemplates = state.promptTemplates.filter((t) => !t.isBuiltIn);
-    const merged = [...BUILT_IN_PROMPTS, ...userTemplates];
+    const merged = [...visibleBuiltIns, ...userTemplates];
     return merged.sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [state.promptTemplates]);
+  }, [state.promptTemplates, hiddenIds]);
 
   const promptFlows = state.promptFlows;
 
@@ -1352,6 +1360,26 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
         const idx = orderedIds.indexOf(t.id);
         return idx >= 0 ? { ...t, sortOrder: idx } : t;
       }),
+    }));
+  }, [commit]);
+
+  const hideBuiltInPrompt = useCallback((id: string): void => {
+    commit((prev) => ({
+      ...prev,
+      hiddenBuiltInPromptIds: [...(prev.hiddenBuiltInPromptIds ?? []).filter((x) => x !== id), id],
+    }));
+  }, [commit]);
+
+  const restoreBuiltInPrompts = useCallback((): void => {
+    commit((prev) => ({ ...prev, hiddenBuiltInPromptIds: [] }));
+  }, [commit]);
+
+  const updateSessionAutoAccept = useCallback((sessionId: string, autoAccept: boolean): void => {
+    commit((prev) => ({
+      ...prev,
+      sessions: prev.sessions.map((s) =>
+        s.id === sessionId ? { ...s, autoAccept, updatedAt: new Date().toISOString() } : s,
+      ),
     }));
   }, [commit]);
 
@@ -1411,6 +1439,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     updatePromptTemplate,
     deletePromptTemplate,
     reorderPromptTemplates,
+    hideBuiltInPrompt,
+    restoreBuiltInPrompts,
+    hiddenBuiltInPromptIds: hiddenIds,
+    updateSessionAutoAccept,
   }), [
     ready,
     state.targets,
@@ -1421,6 +1453,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     state.autoAcceptTools,
     state.notificationsEnabled,
     state.speechLanguage,
+    hiddenIds,
     promptTemplates,
     promptFlows,
     createTarget,
@@ -1466,6 +1499,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     updatePromptTemplate,
     deletePromptTemplate,
     reorderPromptTemplates,
+    hideBuiltInPrompt,
+    restoreBuiltInPrompts,
+    updateSessionAutoAccept,
   ]);
 
   return <AppStoreContext value={value}>{children}</AppStoreContext>;

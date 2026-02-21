@@ -38,6 +38,9 @@ export function PromptLibraryScreen({ navigation }: Props): JSX.Element {
     addPromptTemplate,
     updatePromptTemplate,
     deletePromptTemplate,
+    hideBuiltInPrompt,
+    restoreBuiltInPrompts,
+    hiddenBuiltInPromptIds,
   } = useAppStore();
 
   const [editingTemplate, setEditingTemplate] = useState<PromptTemplate | null>(null);
@@ -152,7 +155,15 @@ export function PromptLibraryScreen({ navigation }: Props): JSX.Element {
           );
 
           if (item.isBuiltIn) {
-            return row;
+            return (
+              <SwipeableRow
+                onDelete={() => hideBuiltInPrompt(item.id)}
+                confirmTitle="Hide Prompt"
+                confirmMessage={`Hide "${item.label}" from quick actions?`}
+              >
+                {row}
+              </SwipeableRow>
+            );
           }
 
           return (
@@ -169,6 +180,21 @@ export function PromptLibraryScreen({ navigation }: Props): JSX.Element {
           <View className="flex-1 items-center justify-center py-20">
             <Text className="text-dimmed text-sm">No prompt templates yet</Text>
           </View>
+        }
+        ListFooterComponent={
+          hiddenBuiltInPromptIds.length > 0 ? (
+            <Pressable
+              className="bg-muted rounded-2xl p-3.5 mt-4 active:opacity-80"
+              onPress={() => {
+                restoreBuiltInPrompts();
+                Alert.alert("Restored", "All built-in prompts have been restored.");
+              }}
+            >
+              <Text className="text-accent font-semibold text-sm text-center">
+                Restore Hidden Prompts ({hiddenBuiltInPromptIds.length})
+              </Text>
+            </Pressable>
+          ) : null
         }
       />
 

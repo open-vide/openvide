@@ -6,9 +6,15 @@ import { useAppStore } from "../state/AppStoreContext";
 import { AiMessageBubble } from "../components/AiMessageBubble";
 import { InputBar } from "../components/InputBar";
 import { QuickActions } from "../components/QuickActions";
+import { ChatControlStrip } from "../components/ChatControlStrip";
+import { AttachmentPicker } from "../components/AttachmentPicker";
+import { AttachmentPreview } from "../components/AttachmentPreview";
+import { ChatTabBar } from "../components/ChatTabBar";
 import { MessageMenu } from "../components/MessageMenu";
 import { ProviderIcon } from "../components/ProviderIcon";
 import { useVoiceInput } from "../core/useVoiceInput";
+import type { Attachment } from "../core/attachmentHandler";
+import { buildPromptWithAttachments } from "../core/attachmentHandler";
 import type { AiMessage, AiSession } from "../core/types";
 import type { MainStackParamList } from "../navigation/types";
 
@@ -28,21 +34,35 @@ function formatTokens(n?: number): string {
 }
 
 export function AiChatScreen({ route, navigation }: Props): JSX.Element {
-  const { sessionId } = route.params;
+  const { sessionId: initialSessionId, initialPrompt, workspaceId } = route.params;
+  const [activeSessionId, setActiveSessionId] = useState(initialSessionId);
+  const sessionId = activeSessionId;
   const {
     getAiSession,
     sendAiPrompt,
     cancelAiTurn,
     subscribeAiSession,
+    updateSessionModel,
+    updateSessionAutoAccept,
     targets,
     speechLanguage,
+    autoAcceptTools,
+    sessions: allSessions,
   } = useAppStore();
 
   const insets = useSafeAreaInsets();
   const [session, setSession] = useState<AiSession | undefined>(() => getAiSession(sessionId));
   const [menuMessage, setMenuMessage] = useState<AiMessage | null>(null);
-  const [inputText, setInputText] = useState("");
+  const [inputText, setInputText] = useState(initialPrompt ?? "");
   const textBeforeVoiceRef = useRef("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [pickerVisible, setPickerVisible] = useState(false);
+
+  // Workspace tab sessions
+  const workspaceSessions = useMemo(() => {
+    if (!workspaceId) return [];
+    return allSessions.filter((s) => s.workspaceId === workspaceId);
+  }, [workspaceId, allSessions]);
   const flatListRef = useRef<FlatList<AiMessage>>(null);
 
   const { isListening, start: voiceStart, stop: voiceStop } = useVoiceInput(
@@ -107,13 +127,15 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
       return;
     }
     try {
-      await sendAiPrompt(session.id, text);
+      const finalPrompt = await buildPromptWithAttachments(text, attachments);
+      setAttachments([]);
+      await sendAiPrompt(session.id, finalPrompt);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error("[OV:ui] send failed:", message);
       Alert.alert("Send failed", message);
     }
-  }, [session, sendAiPrompt]);
+  }, [session, sendAiPrompt, attachments]);
 
   const handleCancel = useCallback(async () => {
     if (!session) {
@@ -158,34 +180,48 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
     >
+      {workspaceId && workspaceSessions.length > 0 && (
+        <ChatTabBar
+          sessions={workspaceSessions}
+          activeSessionId={sessionId}
+          onSelectSession={setActiveSessionId}
+          onCloseSession={(id) => {
+            if (workspaceSessions.length <= 1) {
+              navigation.goBack();
+            } else if (id === sessionId) {
+              const remaining = workspaceSessions.filter((s) => s.id !== id);
+              if (remaining.length > 0) setActiveSessionId(remaining[0]!.id);
+            }
+          }}
+          onNewSession={() => {
+            navigation.getParent()?.navigate("NewWorkspaceChatSheet", { workspaceId });
+          }}
+        />
+      )}
+
       {/* Context usage bar */}
-      <View className="px-4 py-2 border-b border-border">
-        <View className="flex-row items-center gap-2">
-          {hasContext ? (
-            <>
-              <View className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                <View
-                  className="h-full bg-accent rounded-full"
-                  style={{ width: `${usagePercent}%` }}
-                />
-              </View>
-              <Text className="text-dimmed text-[11px]">
-                {formatTokens(contextUsed)} / {formatTokens(contextWindow)}
-              </Text>
-            </>
-          ) : (
+      {hasContext && (
+        <View className="px-4 py-1.5 border-b border-border">
+          <View className="flex-row items-center gap-2">
+            <View className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+              <View
+                className="h-full bg-accent rounded-full"
+                style={{ width: `${usagePercent}%` }}
+              />
+            </View>
             <Text className="text-dimmed text-[11px]">
-              {session.contextLabel ?? "Context N/A"}
+              {formatTokens(contextUsed)} / {formatTokens(contextWindow)}
             </Text>
-          )}
+          </View>
         </View>
-      </View>
+      )}
 
       <FlatList
         ref={flatListRef}
         data={reversedMessages}
         keyExtractor={(item) => item.id}
         inverted
+        style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, gap: 20 }}
         renderItem={({ item }) => (
           <AiMessageBubble
@@ -205,6 +241,20 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
         onAction={handleSend}
       />
 
+      <ChatControlStrip
+        session={session}
+        usagePercent={usagePercent}
+        hasContext={hasContext}
+        autoAcceptGlobal={autoAcceptTools}
+        onModelChange={(model) => updateSessionModel(session.id, model)}
+        onAutoAcceptChange={(value) => updateSessionAutoAccept(session.id, value)}
+      />
+
+      <AttachmentPreview
+        attachments={attachments}
+        onRemove={(id) => setAttachments((prev) => prev.filter((a) => a.id !== id))}
+      />
+
       <InputBar
         placeholder={`Message ${TOOL_LABELS[session.tool] ?? session.tool}...`}
         isRunning={isRunning}
@@ -216,6 +266,13 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
         isListening={isListening}
         onVoiceStart={handleVoiceStart}
         onVoiceEnd={voiceStop}
+        onAttachPress={() => setPickerVisible(true)}
+      />
+
+      <AttachmentPicker
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        onAttach={(att) => setAttachments((prev) => prev.length >= 10 ? prev : [...prev, att])}
       />
 
       <MessageMenu

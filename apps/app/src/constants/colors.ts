@@ -1,3 +1,4 @@
+import { Appearance } from "react-native";
 import { useColorScheme } from "nativewind";
 import { remoteDevTheme } from "../theme";
 
@@ -58,5 +59,15 @@ export const colors = resolve("light");
 export function useThemeColors() {
   const { colorScheme, setColorScheme, toggleColorScheme } = useColorScheme();
   const mode: Mode = colorScheme === "dark" ? "dark" : "light";
-  return { ...resolve(mode), colorScheme: colorScheme ?? "light", setColorScheme, toggleColorScheme };
+
+  const setScheme = (scheme: "light" | "dark" | "system") => {
+    if (scheme === "system") {
+      Appearance.setColorScheme(null);
+    } else {
+      Appearance.setColorScheme(scheme);
+    }
+    setColorScheme(scheme);
+  };
+
+  return { ...resolve(mode), colorScheme: colorScheme ?? "system", setColorScheme: setScheme, toggleColorScheme };
 }

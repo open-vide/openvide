@@ -36,7 +36,7 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
     setSpeechLanguage,
   } = useAppStore();
 
-  const { colorScheme, setColorScheme, accent } = useThemeColors();
+  const { colorScheme, setColorScheme, accent, mutedForeground, muted } = useThemeColors();
 
   const biometric = useBiometricSettings();
 
@@ -79,7 +79,7 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
       <SectionCard title="Appearance">
         <View className="flex-row gap-2">
           {APPEARANCE_OPTIONS.map((opt) => {
-            const active = colorScheme === opt.value || (opt.value === "system" && colorScheme === undefined);
+            const active = colorScheme === opt.value;
             return (
               <Pressable
                 key={opt.value}
@@ -89,7 +89,7 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
                 )}
                 onPress={() => setColorScheme(opt.value)}
               >
-                <Icon name={opt.icon} size={20} color={active ? accent : "#8E8E93"} />
+                <Icon name={opt.icon} size={20} color={active ? accent : mutedForeground} />
                 <Text className={cn("text-xs mt-1 font-semibold", active ? "text-accent" : "text-muted-foreground")}>
                   {opt.label}
                 </Text>
@@ -114,7 +114,7 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
             value={biometric.enabled}
             onValueChange={(v) => void biometric.toggle(v)}
             disabled={!biometric.available || biometric.loading}
-            trackColor={{ false: colorScheme === "dark" ? "#3A3A3C" : "#E5E2DD", true: accent }}
+            trackColor={{ false: muted, true: accent }}
           />
         </View>
       </SectionCard>
@@ -127,7 +127,7 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
           <Switch
             value={autoAcceptTools}
             onValueChange={setAutoAcceptTools}
-            trackColor={{ false: colorScheme === "dark" ? "#3A3A3C" : "#E5E2DD", true: accent }}
+            trackColor={{ false: muted, true: accent }}
           />
         </View>
         <Text className="text-warning text-xs">
@@ -146,7 +146,7 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
           <Switch
             value={notificationsEnabled}
             onValueChange={(v) => void handleNotificationsToggle(v)}
-            trackColor={{ false: colorScheme === "dark" ? "#3A3A3C" : "#E5E2DD", true: accent }}
+            trackColor={{ false: muted, true: accent }}
           />
         </View>
       </SectionCard>
