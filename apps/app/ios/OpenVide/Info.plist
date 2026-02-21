@@ -54,6 +54,8 @@
     <array>
       <string>_ssh._tcp</string>
     </array>
+    <key>NSCameraUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to use the camera to scan QR codes for host setup.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to use Face ID to unlock the app.</string>
     <key>NSLocalNetworkUsageDescription</key>
