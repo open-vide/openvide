@@ -6,7 +6,7 @@ import { SwipeableRow } from "../components/SwipeableRow";
 import { EmptyState } from "../components/EmptyState";
 import { Icon } from "../components/Icon";
 import { GlassContainer } from "../components/GlassContainer";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 import { formatRelativeTime } from "../core/formatTime";
 import type { MainStackParamList } from "../navigation/types";
 
@@ -15,6 +15,7 @@ type Props = NativeStackScreenProps<MainStackParamList, "WorkspaceList">;
 export function WorkspaceListScreen({ navigation }: Props): JSX.Element {
   const { workspaces, targets, deleteWorkspace } = useAppStore();
   const [refreshing, setRefreshing] = useState(false);
+  const { accent } = useThemeColors();
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -23,11 +24,11 @@ export function WorkspaceListScreen({ navigation }: Props): JSX.Element {
           onPress={() => navigation.getParent()?.navigate("CreateWorkspaceSheet" as never)}
           className="w-10 h-10 items-center justify-center active:opacity-80"
         >
-          <Icon name="plus" size={24} color={colors.accent} />
+          <Icon name="plus" size={24} color={accent} />
         </Pressable>
       ),
     });
-  }, [navigation]);
+  }, [accent, navigation]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -65,9 +66,10 @@ export function WorkspaceListScreen({ navigation }: Props): JSX.Element {
         removeClippedSubviews
         renderItem={({ item }) => (
           <SwipeableRow
-            onDelete={() => deleteWorkspace(item.id)}
+            onDelete={() => void deleteWorkspace(item.id)}
             confirmTitle="Delete Workspace"
             confirmMessage={`Delete workspace "${item.name}"? Linked local chats will be removed.`}
+            actionLabel="Delete"
           >
             <Pressable
               className="active:opacity-80"
@@ -76,7 +78,7 @@ export function WorkspaceListScreen({ navigation }: Props): JSX.Element {
               <GlassContainer variant="card" className="p-3.5 gap-2.5">
                 <View className="flex-row justify-between items-center">
                   <View className="flex-row items-center gap-2">
-                    <Icon name="folder" size={18} color={colors.accent} />
+                    <Icon name="folder" size={18} color={accent} />
                     <Text className="text-foreground font-semibold text-sm">{item.name}</Text>
                   </View>
                   <Text className="text-muted-foreground text-xs">{formatRelativeTime(item.updatedAt)}</Text>

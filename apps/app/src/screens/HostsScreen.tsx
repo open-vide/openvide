@@ -6,7 +6,7 @@ import { HostCard } from "../components/HostCard";
 import { SwipeableRow } from "../components/SwipeableRow";
 import { EmptyState } from "../components/EmptyState";
 import { Icon } from "../components/Icon";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 import type { MainStackParamList } from "../navigation/types";
 
 type Props = NativeStackScreenProps<MainStackParamList, "Hosts">;
@@ -14,6 +14,7 @@ type Props = NativeStackScreenProps<MainStackParamList, "Hosts">;
 export function HostsScreen({ navigation }: Props): JSX.Element {
   const { targets, deleteTarget } = useAppStore();
   const [refreshing, setRefreshing] = useState(false);
+  const { accent } = useThemeColors();
   console.log("[OV:ui] HostsScreen render:", targets.length, "targets");
 
   const handleRefresh = useCallback(() => {
@@ -28,11 +29,11 @@ export function HostsScreen({ navigation }: Props): JSX.Element {
           onPress={() => navigation.getParent()?.navigate("AddHostSheet" as never)}
           className="w-10 h-10 items-center justify-center active:opacity-80"
         >
-          <Icon name="plus" size={24} color={colors.accent} />
+          <Icon name="plus" size={24} color={accent} />
         </Pressable>
       ),
     });
-  }, [navigation]);
+  }, [accent, navigation]);
 
   if (targets.length === 0) {
     return (

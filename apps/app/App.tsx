@@ -1,8 +1,7 @@
 import "./global.css";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Pressable, StatusBar } from "react-native";
-import { useColorScheme } from "nativewind";
-import { NavigationContainer, type NavigationContainerRef } from "@react-navigation/native";
+import { DefaultTheme, NavigationContainer, type NavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -23,10 +22,11 @@ import { useThemeColors } from "./src/constants/colors";
 import { GlassProvider } from "./src/components/GlassContainer";
 import { BiometricGate } from "./src/components/BiometricGate";
 import { AnimatedSplash } from "./src/components/AnimatedSplash";
+import { AppThemeProvider, useAppTheme } from "./src/theme/AppThemeProvider";
 
 function ThemeStatusBar(): JSX.Element {
-  const { colorScheme } = useColorScheme();
-  return <StatusBar barStyle={colorScheme === "dark" ? "light-content" : "dark-content"} />;
+  const { resolvedMode } = useAppTheme();
+  return <StatusBar barStyle={resolvedMode === "dark" ? "light-content" : "dark-content"} />;
 }
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -43,8 +43,20 @@ function ModalCloseButton({ onPress, color }: { onPress: () => void; color: stri
 }
 
 function RootNavigator(): JSX.Element {
-  const { background, foreground, card, accent } = useThemeColors();
+  const { background, foreground, card, accent, border } = useThemeColors();
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
+  const navigationTheme = useMemo(() => ({
+    ...DefaultTheme,
+    colors: {
+      ...DefaultTheme.colors,
+      background,
+      card,
+      text: foreground,
+      primary: accent,
+      border,
+      notification: accent,
+    },
+  }), [background, card, foreground, accent, border]);
 
   useEffect(() => {
     registerNotificationCategories().catch(() => {});
@@ -60,7 +72,7 @@ function RootNavigator(): JSX.Element {
   }, []);
 
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme}>
       <RootStack.Navigator>
         <RootStack.Screen
           name="Main"
@@ -165,18 +177,20 @@ export default function App(): JSX.Element {
   return (
     <GestureHandlerRootView className="flex-1">
       <SafeAreaProvider>
-        <AnimatedSplash>
-          <BiometricGate>
-            <GlassProvider>
-              <AppStoreProvider>
-                <ErrorBoundary>
-                  <ThemeStatusBar />
-                  <RootNavigator />
-                </ErrorBoundary>
-              </AppStoreProvider>
-            </GlassProvider>
-          </BiometricGate>
-        </AnimatedSplash>
+        <AppThemeProvider>
+          <AnimatedSplash>
+            <BiometricGate>
+              <GlassProvider>
+                <AppStoreProvider>
+                  <ErrorBoundary>
+                    <ThemeStatusBar />
+                    <RootNavigator />
+                  </ErrorBoundary>
+                </AppStoreProvider>
+              </GlassProvider>
+            </BiometricGate>
+          </AnimatedSplash>
+        </AppThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

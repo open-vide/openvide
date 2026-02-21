@@ -1,7 +1,7 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { Icon, type FeatherIconName } from "./Icon";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 
 export function EmptyState({
   icon,
@@ -14,10 +14,11 @@ export function EmptyState({
   actionLabel?: string;
   onAction?: () => void;
 }): JSX.Element {
+  const { dimmed } = useThemeColors();
   return (
     <View className="flex-1 items-center justify-center px-8 py-12 gap-3">
       <View className="mb-1">
-        <Icon name={icon} size={40} color={colors.dimmed} />
+        <Icon name={icon} size={40} color={dimmed} />
       </View>
       <Text className="text-muted-foreground text-[15px] text-center leading-[22px]">{message}</Text>
       {actionLabel != null && onAction != null && (

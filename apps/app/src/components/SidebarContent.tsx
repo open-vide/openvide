@@ -7,7 +7,7 @@ import { useAppStore } from "../state/AppStoreContext";
 import { useSidebar, type SidebarSection } from "../navigation/SidebarContext";
 import type { MainStackParamList, RootStackParamList } from "../navigation/types";
 import { cn } from "../lib/utils";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 import { Icon, type FeatherIconName } from "./Icon";
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -28,6 +28,7 @@ export function SidebarContent(): JSX.Element {
   const navigation = useNavigation<Nav>();
   const { activeSection, setActiveSection, closeSidebar } = useSidebar();
   const { workspaces, getTarget } = useAppStore();
+  const { dimmed, accent, foreground } = useThemeColors();
   const [search, setSearch] = useState("");
 
   const filteredWorkspaces = useMemo(() => {
@@ -86,11 +87,11 @@ export function SidebarContent(): JSX.Element {
     <View className="flex-1 bg-background overflow-hidden" style={{ paddingTop: insets.top + 12 }}>
       <View className="px-4 mb-4">
         <View className="bg-muted rounded-2xl px-4 h-12 flex-row items-center overflow-hidden">
-          <Icon name="search" size={16} color={colors.dimmed} />
+          <Icon name="search" size={16} color={dimmed} />
           <TextInput
             className="flex-1 text-foreground text-[16px] ml-2"
             placeholder="Search workspaces..."
-            placeholderTextColor={colors.dimmed}
+            placeholderTextColor={dimmed}
             value={search}
             onChangeText={setSearch}
             autoCorrect={false}
@@ -98,7 +99,7 @@ export function SidebarContent(): JSX.Element {
           />
           {search.length > 0 && (
             <Pressable onPress={() => setSearch("")} hitSlop={8}>
-              <Icon name="x" size={14} color={colors.dimmed} />
+              <Icon name="x" size={14} color={dimmed} />
             </Pressable>
           )}
         </View>
@@ -117,7 +118,7 @@ export function SidebarContent(): JSX.Element {
               )}
             >
               <View className="mr-3">
-                <Icon name={section.icon} size={18} color={isActive ? colors.accent : colors.foreground} />
+                <Icon name={section.icon} size={18} color={isActive ? accent : foreground} />
               </View>
               <Text
                 className={cn(
@@ -140,7 +141,7 @@ export function SidebarContent(): JSX.Element {
           onPress={openCreateWorkspace}
           className="w-8 h-8 items-center justify-center rounded-full active:bg-muted"
         >
-          <Icon name="plus" size={16} color={colors.accent} />
+          <Icon name="plus" size={16} color={accent} />
         </Pressable>
       </View>
 
@@ -156,7 +157,7 @@ export function SidebarContent(): JSX.Element {
               onPress={() => openWorkspace(item.id)}
               className="py-2.5 px-3 rounded-lg mb-0.5 active:bg-muted/50 flex-row items-center gap-2.5 overflow-hidden"
             >
-              <Icon name="folder" size={18} color={colors.accent} />
+              <Icon name="folder" size={18} color={accent} />
               <View className="flex-1">
                 <Text className="text-foreground text-[15px]" numberOfLines={1}>
                   {item.name}
@@ -189,7 +190,7 @@ export function SidebarContent(): JSX.Element {
           )}
         >
           <View className="mr-3">
-            <Icon name="settings" size={18} color={activeSection === "settings" ? colors.accent : colors.foreground} />
+            <Icon name="settings" size={18} color={activeSection === "settings" ? accent : foreground} />
           </View>
           <Text
             className={cn(

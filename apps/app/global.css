@@ -2,7 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+.light {
   --background: #FAF7F2;
   --foreground: #1A1A1A;
   --card: #FFFFFF;
@@ -22,24 +23,22 @@
   --dimmed: #AEAEB2;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1C1C1E;
-    --foreground: #F5F5F7;
-    --card: #2C2C2E;
-    --muted: #3A3A3C;
-    --muted-foreground: #8E8E93;
-    --primary: #F5F5F7;
-    --primary-foreground: #1C1C1E;
-    --accent: #D4836B;
-    --destructive: #FF453A;
-    --success: #30D158;
-    --warning: #FFD60A;
-    --error: #FF453A;
-    --error-bg: #3A2020;
-    --info: #D4836B;
-    --border: #3A3A3C;
-    --ring: #D4836B;
-    --dimmed: #636366;
-  }
+.dark {
+  --background: #171614;
+  --foreground: #F2EEE8;
+  --card: #23211F;
+  --muted: #2E2B28;
+  --muted-foreground: #AAA59C;
+  --primary: #F2EEE8;
+  --primary-foreground: #171614;
+  --accent: #D4836B;
+  --destructive: #FF6E5F;
+  --success: #45D08C;
+  --warning: #F4C86E;
+  --error: #FF6E5F;
+  --error-bg: #3C2824;
+  --info: #D4836B;
+  --border: #3B3733;
+  --ring: #D4836B;
+  --dimmed: #6D6860;
 }

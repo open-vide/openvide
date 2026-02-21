@@ -4,11 +4,12 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { decodeQrPayload } from "../core/qrPayload";
 import type { RootStackParamList } from "../navigation/types";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "QrScannerSheet">;
 
 export function QrScannerSheet({ navigation }: Props): JSX.Element {
+  const { accent } = useThemeColors();
   const [permission, requestPermission] = useCameraPermissions();
   const [error, setError] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
@@ -73,7 +74,7 @@ export function QrScannerSheet({ navigation }: Props): JSX.Element {
             width: 250,
             height: 250,
             borderWidth: 2,
-            borderColor: colors.accent,
+            borderColor: accent,
             borderRadius: 16,
           }}
         />

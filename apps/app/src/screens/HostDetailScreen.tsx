@@ -6,8 +6,6 @@ import { SectionCard } from "../components/SectionCard";
 import { StatePill } from "../components/StatePill";
 import { HostStatusDot } from "../components/HostStatusDot";
 import { ProviderIcon } from "../components/ProviderIcon";
-import { SessionCard } from "../components/SessionCard";
-import { SwipeableRow } from "../components/SwipeableRow";
 import { Icon } from "../components/Icon";
 import { cn } from "../lib/utils";
 import type { ToolName } from "../core/types";
@@ -30,14 +28,11 @@ export function HostDetailScreen({ route, navigation }: Props): JSX.Element {
   const {
     getTarget,
     deleteTarget,
-    deleteSession,
     runCliDetection,
     startToolRun,
     subscribeRun,
     installDaemon,
-    importDaemonSessions,
     readinessByTarget,
-    listSessionsByTarget,
   } = useAppStore();
 
   const { accent, success } = useThemeColors();
@@ -45,9 +40,7 @@ export function HostDetailScreen({ route, navigation }: Props): JSX.Element {
   const [detecting, setDetecting] = useState(false);
   const [installingTool, setInstallingTool] = useState<ToolName | null>(null);
   const [installingDaemon, setInstallingDaemon] = useState(false);
-  const [importingSessions, setImportingSessions] = useState(false);
   const readiness = readinessByTarget[targetId];
-  const sessions = listSessionsByTarget(targetId);
 
   const handleDetectTools = useCallback(async (): Promise<void> => {
     if (detecting) return;
@@ -112,23 +105,6 @@ export function HostDetailScreen({ route, navigation }: Props): JSX.Element {
       console.warn("[OV:ui] HostDetail: daemon install failed:", err);
     }
     setInstallingDaemon(false);
-  };
-
-  const handleImportSessions = async (): Promise<void> => {
-    if (importingSessions) return;
-    setImportingSessions(true);
-    try {
-      const imported = await importDaemonSessions(targetId);
-      if (imported.length === 0) {
-        Alert.alert("No Sessions", "No new daemon sessions available to import.");
-      } else {
-        Alert.alert("Imported", `Imported ${imported.length} session${imported.length === 1 ? "" : "s"} from the daemon.`);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      Alert.alert("Import Failed", msg);
-    }
-    setImportingSessions(false);
   };
 
   const handleDelete = (): void => {
@@ -304,50 +280,6 @@ export function HostDetailScreen({ route, navigation }: Props): JSX.Element {
           <Text className="text-accent font-semibold text-sm">Terminal</Text>
         </Pressable>
       </View>
-      <Pressable
-        className="bg-card border border-border rounded-2xl p-3.5 items-center active:opacity-80"
-        onPress={() => navigation.navigate("PortBrowser", { targetId })}
-      >
-        <Text className="text-accent font-semibold text-sm">Scan Open Ports</Text>
-      </Pressable>
-
-      {/* Recent Sessions */}
-      <SectionCard title="Recent Sessions">
-        {sessions.length > 0 ? (
-          sessions.slice(0, 5).map((session) => (
-            <SwipeableRow
-              key={session.id}
-              onDelete={() => void deleteSession(session.id)}
-              confirmTitle="Delete Session"
-              confirmMessage="Delete this session? This cannot be undone."
-            >
-              <SessionCard
-                session={session}
-                hostLabel={target.label}
-                onPress={() => {
-                  navigation.navigate("AiChat", { sessionId: session.id });
-                }}
-              />
-            </SwipeableRow>
-          ))
-        ) : (
-          <Text className="text-muted-foreground text-sm">No sessions yet</Text>
-        )}
-        {daemonInstalled && (
-          <Pressable
-            className={cn("flex-row items-center justify-center gap-2 bg-muted rounded-xl py-3 mt-1 active:opacity-80", importingSessions && "opacity-40")}
-            onPress={handleImportSessions}
-            disabled={importingSessions}
-          >
-            {importingSessions ? (
-              <ActivityIndicator size="small" color={accent} />
-            ) : (
-              <Icon name="download" size={16} color={accent} />
-            )}
-            <Text className="text-accent font-semibold text-sm">Import Daemon Sessions</Text>
-          </Pressable>
-        )}
-      </SectionCard>
 
       {/* Delete */}
       <Pressable className="bg-error-bg rounded-2xl p-3.5 items-center" onPress={handleDelete}>

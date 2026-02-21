@@ -1,73 +1,35 @@
-import { Appearance } from "react-native";
-import { useColorScheme } from "nativewind";
-import { remoteDevTheme } from "../theme";
+import { useAppTheme, type ThemePreference } from "../theme/AppThemeProvider";
+import { resolveThemeColors } from "../theme/colorTokens";
+import { getResolvedThemeMode } from "../theme/themeRuntime";
 
-type Mode = "light" | "dark";
+type ThemeColorMap = ReturnType<typeof resolveThemeColors>;
 
-function resolve(mode: Mode) {
-  const t = remoteDevTheme.colors;
-  return {
-    // Semantic tokens
-    background: t.background[mode],
-    foreground: t.foreground[mode],
-    card: t.card[mode],
-    muted: t.muted[mode],
-    mutedForeground: t.mutedForeground[mode],
-    primary: t.primary[mode],
-    primaryForeground: t.primaryForeground[mode],
-    destructive: t.destructive[mode],
-    success: t.success[mode],
-    warning: t.warning[mode],
-    error: t.error[mode],
-    border: t.border[mode],
-    ring: t.ring[mode],
-
-    // Accent (terracotta)
-    accent: mode === "light" ? "#C4704B" : "#D4836B",
-
-    // App-specific semantic aliases
-    headerBg: t.background[mode],
-    pressedPrimary: mode === "light" ? "#3A3A3C" : "#636366",
-    dimmed: mode === "light" ? "#AEAEB2" : "#636366",
-    white: "#FFFFFF",
-    black: "#000000",
-    lightForeground: t.foreground[mode],
-
-    // Status variants
-    errorBg: mode === "light" ? "#FEF2F2" : "#3A2020",
-    errorLight: "#fca5a5",
-    errorBright: "#f87171",
-    warningLight: mode === "light" ? "#F5A623" : "#FFD60A",
-
-    // Neutral grays
-    neutral: mode === "light" ? "#8E8E93" : "#636366",
-
-    // Tool badge colors (app-specific)
-    toolClaude: "#C4704B",
-    toolCodex: "#10A37F",
-    toolGemini: "#4285F4",
-
-    // Timeout/special
-    timeout: "#ea580c",
-  } as const;
-}
-
-/** Static light-mode colors for non-hook contexts */
-export const colors = resolve("light");
+/** Backward-compatible color object for non-hook contexts. */
+export const colors = new Proxy({} as ThemeColorMap, {
+  get(_target, prop) {
+    if (typeof prop !== "string") return undefined;
+    const resolved = resolveThemeColors(getResolvedThemeMode());
+    return resolved[prop as keyof ThemeColorMap];
+  },
+}) as ThemeColorMap;
 
 /** Hook that returns theme-aware colors + scheme controls */
 export function useThemeColors() {
-  const { colorScheme, setColorScheme, toggleColorScheme } = useColorScheme();
-  const mode: Mode = colorScheme === "dark" ? "dark" : "light";
+  const { themePreference, resolvedMode, setThemePreference } = useAppTheme();
 
-  const setScheme = (scheme: "light" | "dark" | "system") => {
-    if (scheme === "system") {
-      Appearance.setColorScheme(null);
-    } else {
-      Appearance.setColorScheme(scheme);
-    }
-    setColorScheme(scheme);
+  const setColorScheme = (scheme: ThemePreference) => {
+    setThemePreference(scheme);
   };
 
-  return { ...resolve(mode), colorScheme: colorScheme ?? "system", setColorScheme: setScheme, toggleColorScheme };
+  const toggleColorScheme = () => {
+    setThemePreference(resolvedMode === "dark" ? "light" : "dark");
+  };
+
+  return {
+    ...resolveThemeColors(resolvedMode),
+    colorScheme: themePreference,
+    resolvedColorScheme: resolvedMode,
+    setColorScheme,
+    toggleColorScheme,
+  };
 }

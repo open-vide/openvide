@@ -4,7 +4,7 @@ import type { AiMessage } from "../core/types";
 import { AiContentBlockView } from "./AiContentBlockView";
 import { StreamingDots } from "./StreamingDots";
 import { Icon } from "./Icon";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 
 export const AiMessageBubble = React.memo(function AiMessageBubble({
   message,
@@ -15,6 +15,7 @@ export const AiMessageBubble = React.memo(function AiMessageBubble({
   onMenuPress?: (message: AiMessage) => void;
   onSendResponse?: (text: string) => void;
 }): JSX.Element {
+  const { dimmed } = useThemeColors();
   if (message.role === "user") {
     const textContent = message.content
       .filter((b) => b.type === "text")
@@ -56,7 +57,7 @@ export const AiMessageBubble = React.memo(function AiMessageBubble({
             accessibilityRole="button"
             accessibilityLabel="Message options"
           >
-            <Icon name="more-horizontal" size={18} color={colors.dimmed} />
+            <Icon name="more-horizontal" size={18} color={dimmed} />
           </Pressable>
         </View>
       )}

@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { HostStatusDot } from "../components/HostStatusDot";
 import { Icon } from "../components/Icon";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 import type { RootStackParamList } from "../navigation/types";
 import { useAppStore } from "../state/AppStoreContext";
 import { cn } from "../lib/utils";
@@ -21,6 +21,7 @@ export function CreateWorkspaceSheet({ route, navigation }: Props): JSX.Element 
     createWorkspace,
     getWorkspaceHostEligibility,
   } = useAppStore();
+  const { dimmed, accent, warning } = useThemeColors();
 
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [directory, setDirectory] = useState("");
@@ -111,7 +112,7 @@ export function CreateWorkspaceSheet({ route, navigation }: Props): JSX.Element 
                 <Text className="text-dimmed text-[15px]">Select a host...</Text>
               )}
             </View>
-            <Icon name={hostDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.dimmed} />
+            <Icon name={hostDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color={dimmed} />
           </Pressable>
 
           {hostDropdownOpen && (
@@ -141,7 +142,7 @@ export function CreateWorkspaceSheet({ route, navigation }: Props): JSX.Element 
                       )}
                     </View>
                     {selectedTargetId === target.id && (
-                      <Icon name="check" size={18} color={colors.accent} />
+                      <Icon name="check" size={18} color={accent} />
                     )}
                   </Pressable>
                 );
@@ -153,7 +154,7 @@ export function CreateWorkspaceSheet({ route, navigation }: Props): JSX.Element 
 
       {targets.length > 0 && !selectedEligibility.eligible && (
         <View className="flex-row items-center gap-2 bg-muted rounded-2xl p-3">
-          <Icon name="alert-triangle" size={16} color={colors.warning} />
+          <Icon name="alert-triangle" size={16} color={warning} />
           <Text className="text-warning text-[13px] flex-1">
             {selectedEligibility.reason}
           </Text>
@@ -178,7 +179,7 @@ export function CreateWorkspaceSheet({ route, navigation }: Props): JSX.Element 
             }
           }}
           placeholder="/home/user/project"
-          placeholderTextColor={colors.dimmed}
+          placeholderTextColor={dimmed}
         />
         <Pressable
           className={cn(
@@ -195,7 +196,7 @@ export function CreateWorkspaceSheet({ route, navigation }: Props): JSX.Element 
           }}
           disabled={!selectedTargetId}
         >
-          <Icon name="folder" size={20} color={colors.accent} />
+          <Icon name="folder" size={20} color={accent} />
         </Pressable>
       </View>
 
@@ -208,7 +209,7 @@ export function CreateWorkspaceSheet({ route, navigation }: Props): JSX.Element 
           setName(value);
         }}
         placeholder="Workspace name"
-        placeholderTextColor={colors.dimmed}
+        placeholderTextColor={dimmed}
       />
 
       {error && <Text className="text-error-bright text-[13px]">{error}</Text>}

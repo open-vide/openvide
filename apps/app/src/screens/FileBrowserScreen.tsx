@@ -208,16 +208,15 @@ export function FileBrowserScreen(): JSX.Element {
       headerRight: () => (
         <Pressable
           className={cn(
-            "w-9 h-9 rounded-full items-center justify-center active:opacity-80",
-            searchVisible ? "bg-accent" : "bg-muted",
+            "w-9 h-9 items-center justify-center active:opacity-80",
           )}
           onPress={toggleSearch}
         >
-          <Icon name="search" size={16} color={searchVisible ? "#FFFFFF" : mutedForeground} />
+          <Icon name="search" size={16} color={searchVisible ? accent : mutedForeground} />
         </Pressable>
       ),
     });
-  }, [currentPath, navigation, searchVisible, toggleSearch, mutedForeground]);
+  }, [accent, currentPath, navigation, searchVisible, toggleSearch, mutedForeground]);
 
   const handleEntryPress = useCallback((entry: RemoteFileEntry) => {
     if (entry.isDirectory) {

@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { ProviderIcon } from "../components/ProviderIcon";
 import { Icon } from "../components/Icon";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 import { getDefaultModel } from "../core/modelOptions";
 import type { ToolName } from "../core/types";
 import { cn } from "../lib/utils";
@@ -21,6 +21,7 @@ const TOOL_LABELS: Record<ToolName, string> = {
 export function NewWorkspaceChatSheet({ route, navigation }: Props): JSX.Element {
   const { workspaceId } = route.params ?? {};
   const { getWorkspace, getTarget, createDraftSession } = useAppStore();
+  const { warning } = useThemeColors();
 
   const workspace = workspaceId ? getWorkspace(workspaceId) : undefined;
   const target = workspace ? getTarget(workspace.targetId) : undefined;
@@ -78,7 +79,7 @@ export function NewWorkspaceChatSheet({ route, navigation }: Props): JSX.Element
       <Text className="text-foreground text-[15px] font-bold uppercase mt-2">CLI</Text>
       {availableTools.length === 0 ? (
         <View className="flex-row items-center gap-2 bg-muted rounded-2xl p-3">
-          <Icon name="alert-triangle" size={16} color={colors.warning} />
+          <Icon name="alert-triangle" size={16} color={warning} />
           <Text className="text-warning text-[13px] flex-1">
             No Claude/Codex CLI detected on this host.
           </Text>

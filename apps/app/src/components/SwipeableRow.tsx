@@ -9,9 +9,11 @@ import Animated, {
   withTiming,
   Easing,
 } from "react-native-reanimated";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
+import { Icon } from "./Icon";
 
-const SNAP_OPEN = -80;
+const ACTION_WIDTH = 88;
+const SNAP_OPEN = -ACTION_WIDTH;
 const SNAP_CLOSED = 0;
 const VELOCITY_THRESHOLD = 500;
 const SPRING_CONFIG = { damping: 20, stiffness: 200, mass: 0.8 };
@@ -20,6 +22,7 @@ interface SwipeableRowProps {
   onDelete: () => void;
   confirmTitle?: string;
   confirmMessage?: string;
+  actionLabel?: string;
   enabled?: boolean;
   children: React.ReactNode;
 }
@@ -28,9 +31,11 @@ export function SwipeableRow({
   onDelete,
   confirmTitle = "Delete",
   confirmMessage = "Are you sure you want to delete this item?",
+  actionLabel = "Delete",
   enabled = true,
   children,
 }: SwipeableRowProps): JSX.Element {
+  const { destructive } = useThemeColors();
   const translateX = useSharedValue(0);
   const startX = useSharedValue(0);
   const isDeleting = useSharedValue(false);
@@ -118,15 +123,11 @@ export function SwipeableRow({
     <Animated.View style={containerStyle} onLayout={handleLayout}>
       <View className="relative">
         <Animated.View
-          style={[StyleSheet.absoluteFill, {
-            backgroundColor: colors.destructive,
-            borderRadius: 18,
-            justifyContent: "center",
-            alignItems: "flex-end",
-          }, backgroundOpacity]}
+          style={[StyleSheet.absoluteFill, { ...styles.actionBackground, backgroundColor: destructive }, backgroundOpacity]}
         >
-          <Pressable className="w-20 h-full justify-center items-center" onPress={confirmDelete}>
-            <Text className="text-white text-sm font-semibold">Delete</Text>
+          <Pressable style={styles.actionButton} onPress={confirmDelete}>
+            <Icon name="trash-2" size={14} color="#FFFFFF" />
+            <Text className="text-white text-xs font-semibold">{actionLabel}</Text>
           </Pressable>
         </Animated.View>
         <GestureDetector gesture={pan}>
@@ -136,3 +137,18 @@ export function SwipeableRow({
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  actionBackground: {
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "flex-end",
+  },
+  actionButton: {
+    width: ACTION_WIDTH,
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+});

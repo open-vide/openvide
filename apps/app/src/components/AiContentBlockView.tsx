@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Linking, Platform, Pressable, Text, View } from "react-native";
 import Markdown from "react-native-markdown-display";
 import { useNavigation } from "@react-navigation/native";
@@ -11,125 +11,7 @@ import { MonoBlock } from "./MonoBlock";
 import { TruncatedText } from "./TruncatedText";
 import { ToolUseCard } from "./ToolUseCard";
 import { cn } from "../lib/utils";
-import { colors } from "../constants/colors";
-
-const markdownStyles = {
-  body: {
-    color: colors.foreground,
-    fontSize: 15,
-    lineHeight: 22,
-    flexShrink: 1,
-  },
-  heading1: {
-    color: colors.foreground,
-    fontSize: 22,
-    fontWeight: "700" as const,
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  heading2: {
-    color: colors.foreground,
-    fontSize: 19,
-    fontWeight: "700" as const,
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  heading3: {
-    color: colors.foreground,
-    fontSize: 16,
-    fontWeight: "600" as const,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  paragraph: {
-    color: colors.foreground,
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 0,
-    marginBottom: 8,
-  },
-  strong: {
-    color: colors.foreground,
-    fontWeight: "700" as const,
-  },
-  em: {
-    color: colors.mutedForeground,
-    fontStyle: "italic" as const,
-  },
-  link: {
-    color: colors.accent,
-    textDecorationLine: "underline" as const,
-  },
-  blockquote: {
-    backgroundColor: colors.muted,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.accent,
-    paddingLeft: 12,
-    paddingVertical: 4,
-    marginVertical: 6,
-  },
-  code_inline: {
-    backgroundColor: colors.muted,
-    color: colors.foreground,
-    fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
-    fontSize: 13,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  code_block: {
-    backgroundColor: "#1E1E1E",
-    color: "#D4D4D4",
-    fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
-    fontSize: 13,
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 6,
-  },
-  fence: {
-    backgroundColor: "#1E1E1E",
-    color: "#D4D4D4",
-    fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
-    fontSize: 13,
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 6,
-  },
-  list_item: {
-    color: colors.foreground,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  bullet_list: {
-    marginVertical: 4,
-  },
-  ordered_list: {
-    marginVertical: 4,
-  },
-  hr: {
-    backgroundColor: colors.border,
-    height: 1,
-    marginVertical: 12,
-  },
-  table: {
-    borderColor: colors.border,
-    borderWidth: 1,
-  },
-  thead: {
-    backgroundColor: colors.muted,
-  },
-  th: {
-    color: colors.foreground,
-    fontWeight: "600" as const,
-    padding: 6,
-    borderColor: colors.border,
-  },
-  td: {
-    color: colors.foreground,
-    padding: 6,
-    borderColor: colors.border,
-  },
-};
+import { useThemeColors } from "../constants/colors";
 
 // Custom markdown rules for syntax-highlighted fenced code blocks.
 // Signature: (node, children, parent, styles, inheritedStyles) per react-native-markdown-display
@@ -166,6 +48,124 @@ export const AiContentBlockView = React.memo(function AiContentBlockView({
   onSendResponse?: (text: string) => void;
 }): JSX.Element {
   const navigation = useNavigation<any>();
+  const { foreground, mutedForeground, accent, muted, border } = useThemeColors();
+  const markdownStyles = useMemo(() => ({
+    body: {
+      color: foreground,
+      fontSize: 15,
+      lineHeight: 22,
+      flexShrink: 1,
+    },
+    heading1: {
+      color: foreground,
+      fontSize: 22,
+      fontWeight: "700" as const,
+      marginTop: 12,
+      marginBottom: 6,
+    },
+    heading2: {
+      color: foreground,
+      fontSize: 19,
+      fontWeight: "700" as const,
+      marginTop: 10,
+      marginBottom: 4,
+    },
+    heading3: {
+      color: foreground,
+      fontSize: 16,
+      fontWeight: "600" as const,
+      marginTop: 8,
+      marginBottom: 4,
+    },
+    paragraph: {
+      color: foreground,
+      fontSize: 15,
+      lineHeight: 22,
+      marginTop: 0,
+      marginBottom: 8,
+    },
+    strong: {
+      color: foreground,
+      fontWeight: "700" as const,
+    },
+    em: {
+      color: mutedForeground,
+      fontStyle: "italic" as const,
+    },
+    link: {
+      color: accent,
+      textDecorationLine: "underline" as const,
+    },
+    blockquote: {
+      backgroundColor: muted,
+      borderLeftWidth: 3,
+      borderLeftColor: accent,
+      paddingLeft: 12,
+      paddingVertical: 4,
+      marginVertical: 6,
+    },
+    code_inline: {
+      backgroundColor: muted,
+      color: foreground,
+      fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
+      fontSize: 13,
+      paddingHorizontal: 5,
+      paddingVertical: 2,
+      borderRadius: 4,
+    },
+    code_block: {
+      backgroundColor: "#1E1E1E",
+      color: "#D4D4D4",
+      fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
+      fontSize: 13,
+      padding: 12,
+      borderRadius: 8,
+      marginVertical: 6,
+    },
+    fence: {
+      backgroundColor: "#1E1E1E",
+      color: "#D4D4D4",
+      fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
+      fontSize: 13,
+      padding: 12,
+      borderRadius: 8,
+      marginVertical: 6,
+    },
+    list_item: {
+      color: foreground,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    bullet_list: {
+      marginVertical: 4,
+    },
+    ordered_list: {
+      marginVertical: 4,
+    },
+    hr: {
+      backgroundColor: border,
+      height: 1,
+      marginVertical: 12,
+    },
+    table: {
+      borderColor: border,
+      borderWidth: 1,
+    },
+    thead: {
+      backgroundColor: muted,
+    },
+    th: {
+      color: foreground,
+      fontWeight: "600" as const,
+      padding: 6,
+      borderColor: border,
+    },
+    td: {
+      color: foreground,
+      padding: 6,
+      borderColor: border,
+    },
+  }), [accent, border, foreground, muted, mutedForeground]);
 
   switch (block.type) {
     case "text":
@@ -191,7 +191,7 @@ export const AiContentBlockView = React.memo(function AiContentBlockView({
           <Markdown
             style={{
               ...markdownStyles,
-              body: { ...markdownStyles.body, color: colors.mutedForeground, fontStyle: "italic" as const },
+              body: { ...markdownStyles.body, color: mutedForeground, fontStyle: "italic" as const },
             }}
             rules={markdownRules}
           >

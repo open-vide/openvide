@@ -6,8 +6,8 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
-    "ios": "expo run:ios --no-install",
-    "ios:install": "expo run:ios",
+    "ios": "node scripts/cleanup-stale-ios-projects.js && expo run:ios --scheme OpenVide --no-install",
+    "ios:install": "node scripts/cleanup-stale-ios-projects.js && expo run:ios --scheme OpenVide",
     "prebuild": "expo prebuild && node scripts/strip-push-entitlement.js",
     "prebuild:clean": "expo prebuild --clean && node scripts/strip-push-entitlement.js",
     "web": "expo start --web",

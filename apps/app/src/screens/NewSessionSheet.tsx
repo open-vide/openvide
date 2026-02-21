@@ -8,7 +8,7 @@ import { Icon } from "../components/Icon";
 import { cn } from "../lib/utils";
 import type { ToolName } from "../core/types";
 import type { RootStackParamList } from "../navigation/types";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 import { getDefaultModel } from "../core/modelOptions";
 import { evaluateDaemonCompatibility } from "../core/daemonVersion";
 
@@ -24,6 +24,7 @@ const TOOL_LABELS: Record<ToolName, string> = {
 
 export function NewSessionSheet({ route, navigation }: Props): JSX.Element {
   const { targets, createDraftSession } = useAppStore();
+  const { dimmed, accent, warning } = useThemeColors();
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<ToolName | null>(null);
   const [workingDirectory, setWorkingDirectory] = useState("");
@@ -138,7 +139,7 @@ export function NewSessionSheet({ route, navigation }: Props): JSX.Element {
                   <Text className="text-dimmed text-[15px]">Select a host...</Text>
                 )}
               </View>
-              <Icon name={hostDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color={colors.dimmed} />
+              <Icon name={hostDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color={dimmed} />
             </Pressable>
 
             {/* Dropdown list */}
@@ -161,7 +162,7 @@ export function NewSessionSheet({ route, navigation }: Props): JSX.Element {
                       </Text>
                     </View>
                     {selectedTargetId === target.id && (
-                      <Icon name="check" size={18} color={colors.accent} />
+                      <Icon name="check" size={18} color={accent} />
                     )}
                   </Pressable>
                 ))}
@@ -206,7 +207,7 @@ export function NewSessionSheet({ route, navigation }: Props): JSX.Element {
             value={workingDirectory}
             onChangeText={setWorkingDirectory}
             placeholder="/home/user/project"
-            placeholderTextColor={colors.dimmed}
+            placeholderTextColor={dimmed}
           />
           <Pressable
             className={cn(
@@ -224,13 +225,13 @@ export function NewSessionSheet({ route, navigation }: Props): JSX.Element {
             }}
             disabled={!selectedTargetId}
           >
-            <Icon name="folder" size={20} color={colors.accent} />
+            <Icon name="folder" size={20} color={accent} />
           </Pressable>
         </View>
 
         {selectedTargetId && !daemonInstalled && (
           <View className="flex-row items-center gap-2 bg-muted rounded-2xl p-3">
-            <Icon name="alert-triangle" size={16} color={colors.warning} />
+            <Icon name="alert-triangle" size={16} color={warning} />
             <Text className="text-warning text-[13px] flex-1">
               Open Vide daemon not installed on this host. Install it from the host detail screen.
             </Text>
@@ -238,7 +239,7 @@ export function NewSessionSheet({ route, navigation }: Props): JSX.Element {
         )}
         {selectedTargetId && daemonInstalled && !daemonCompatible && (
           <View className="flex-row items-center gap-2 bg-muted rounded-2xl p-3">
-            <Icon name="alert-triangle" size={16} color={colors.warning} />
+            <Icon name="alert-triangle" size={16} color={warning} />
             <Text className="text-warning text-[13px] flex-1">
               {daemonCompatibilityReason ?? "Open Vide daemon is outdated. Update it from the host detail screen."}
             </Text>

@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, Text, View } from "react-native";
 import type { RemoteFileEntry } from "../core/ssh/fileOps";
 import { Icon } from "./Icon";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -17,6 +17,7 @@ export const FileEntryRow = React.memo(function FileEntryRow({
   entry: RemoteFileEntry;
   onPress: () => void;
 }): JSX.Element {
+  const { accent, mutedForeground } = useThemeColors();
   return (
     <Pressable
       className="flex-row items-center gap-3 px-4 py-3 border-b border-border active:bg-muted"
@@ -25,7 +26,7 @@ export const FileEntryRow = React.memo(function FileEntryRow({
       <Icon
         name={entry.isDirectory ? "folder" : "file-text"}
         size={20}
-        color={entry.isDirectory ? colors.accent : colors.mutedForeground}
+        color={entry.isDirectory ? accent : mutedForeground}
       />
       <View className="flex-1">
         <Text className="text-foreground text-[15px]" numberOfLines={1}>
@@ -38,7 +39,7 @@ export const FileEntryRow = React.memo(function FileEntryRow({
         )}
       </View>
       {entry.isDirectory && (
-        <Icon name="chevron-right" size={16} color={colors.mutedForeground} />
+        <Icon name="chevron-right" size={16} color={mutedForeground} />
       )}
     </Pressable>
   );
