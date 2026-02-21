@@ -67,7 +67,7 @@ export function parseDiff(text: string): ParsedDiff[] {
             if (!hunkLine || hunkLine.startsWith("--- ")) break;
 
             if (hunkLine.startsWith("@@ ")) {
-              const match = /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@(.*)$/.exec(hunkLine);
+              const match = /^@@\s+-(\d+)(?:,\s*(\d+))?\s+\+(\d+)(?:,\s*(\d+))?\s+@@(.*)$/.exec(hunkLine);
               if (!match) {
                 i++;
                 continue;

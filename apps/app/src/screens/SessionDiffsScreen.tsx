@@ -84,7 +84,7 @@ export function SessionDiffsScreen(): JSX.Element {
 
         // Untracked files — generate diff-like output for new files
         const untrackedOut = await runCmd(
-          `cd '${wd}' && git ls-files --others --exclude-standard 2>/dev/null | while IFS= read -r f; do echo "diff --git a/$f b/$f"; echo "new file mode 100644"; echo "--- /dev/null"; echo "+++ b/$f"; lines=$(wc -l < "$f" 2>/dev/null || echo 0); echo "@@ -0,0 +1,$lines @@"; sed 's/^/+/' "$f" 2>/dev/null; done`,
+          `cd '${wd}' && git ls-files --others --exclude-standard 2>/dev/null | while IFS= read -r f; do echo "diff --git a/$f b/$f"; echo "new file mode 100644"; echo "--- /dev/null"; echo "+++ b/$f"; lines=$(wc -l < "$f" 2>/dev/null | tr -d ' ' || echo 0); echo "@@ -0,0 +1,$lines @@"; sed 's/^/+/' "$f" 2>/dev/null; done`,
         );
         if (cancelled) return;
 
