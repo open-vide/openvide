@@ -287,7 +287,6 @@ export class SessionEngine {
     workingDirectory?: string;
     allowedTools?: string[];
     model?: string;
-    autoAccept?: boolean;
   }): Promise<AiSession> {
     console.log("[OV:engine] startSession:", input.tool, "target=" + input.target.label, "prompt=" + input.prompt.slice(0, 80));
     const session: AiSession = {
@@ -310,7 +309,7 @@ export class SessionEngine {
     this.notify(session);
     await this.persist(session);
 
-    const turnPromise = this.executeTurn(session, input.target, input.credentials, input.prompt, input.allowedTools, input.autoAccept).catch((err) => {
+    const turnPromise = this.executeTurn(session, input.target, input.credentials, input.prompt, input.allowedTools).catch((err) => {
       console.error("[OV:engine] background executeTurn error:", err);
     });
     this.activeTurns.set(session.id, turnPromise);
@@ -328,7 +327,6 @@ export class SessionEngine {
       target: TargetProfile;
       credentials: SshCredentials;
       prompt: string;
-      autoAccept?: boolean;
     },
   ): Promise<void> {
     console.log("[OV:engine] sendPrompt:", sessionId, "prompt=" + input.prompt.slice(0, 80));
@@ -348,7 +346,7 @@ export class SessionEngine {
       // Re-check session still exists after waiting
       if (!this.sessions.has(sessionId)) return;
       const s = this.sessions.get(sessionId)!;
-      await this.executeTurn(s, input.target, input.credentials, input.prompt, undefined, input.autoAccept);
+      await this.executeTurn(s, input.target, input.credentials, input.prompt);
     }).catch((err) => {
       console.error("[OV:engine] chained executeTurn error:", err);
     });
@@ -782,7 +780,6 @@ export class SessionEngine {
     credentials: SshCredentials,
     prompt: string,
     _allowedTools?: string[],
-    autoAccept?: boolean,
   ): Promise<void> {
     console.log("[OV:engine] executeTurn start:", session.id, "tool=" + session.tool, "turn=" + session.turns.length);
     const adapter = getAdapter(session.tool);
@@ -821,7 +818,6 @@ export class SessionEngine {
             tool: session.tool,
             cwd: session.workingDirectory ?? "~",
             model: session.model,
-            autoAccept,
             conversationId: session.conversationId,
           },
         );

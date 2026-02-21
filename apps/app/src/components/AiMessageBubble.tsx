@@ -10,10 +10,12 @@ export const AiMessageBubble = React.memo(function AiMessageBubble({
   message,
   onMenuPress,
   onSendResponse,
+  showToolDetails,
 }: {
   message: AiMessage;
   onMenuPress?: (message: AiMessage) => void;
   onSendResponse?: (text: string) => void;
+  showToolDetails?: boolean;
 }): JSX.Element {
   const { dimmed } = useThemeColors();
   if (message.role === "user") {
@@ -68,6 +70,7 @@ export const AiMessageBubble = React.memo(function AiMessageBubble({
           isStreaming={message.isStreaming}
           isLastBlock={index === message.content.length - 1}
           onSendResponse={onSendResponse}
+          showToolDetails={showToolDetails}
         />
       ))}
       {message.isStreaming === true && <StreamingDots />}

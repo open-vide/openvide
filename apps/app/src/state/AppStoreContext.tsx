@@ -51,7 +51,7 @@ const EMPTY_STATE: PersistedState = {
   promptTemplates: [],
   promptFlows: [],
   hiddenBuiltInPromptIds: [],
-  autoAcceptTools: false,
+  showToolDetails: true,
   notificationsEnabled: true,
   speechLanguage: "en-US",
 };
@@ -204,8 +204,8 @@ interface AppStoreContextShape {
   openWorkspaceChat: (workspaceId: string, workspaceChatId: string) => Promise<AiSession>;
   installDaemon: (targetId: string) => Promise<RunRecord>;
   cancelRun: (runId: string) => Promise<boolean>;
-  autoAcceptTools: boolean;
-  setAutoAcceptTools: (value: boolean) => void;
+  showToolDetails: boolean;
+  setShowToolDetails: (value: boolean) => void;
   notificationsEnabled: boolean;
   setNotificationsEnabled: (value: boolean) => void;
   speechLanguage: string;
@@ -245,7 +245,7 @@ interface AppStoreContextShape {
   hideBuiltInPrompt: (id: string) => void;
   restoreBuiltInPrompts: () => void;
   hiddenBuiltInPromptIds: string[];
-  updateSessionAutoAccept: (sessionId: string, autoAccept: boolean) => void;
+  updateSessionShowToolDetails: (sessionId: string, showToolDetails: boolean) => void;
 }
 
 const AppStoreContext = createContext<AppStoreContextShape | null>(null);
@@ -1111,7 +1111,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
       workingDirectory: input.workingDirectory,
       allowedTools: input.allowedTools,
       model: input.model,
-      autoAccept: stateRef.current.autoAcceptTools,
     });
     console.log("[OV:store] startAiSession: session created", session.id, "status=" + session.status);
     return session;
@@ -1136,8 +1135,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
       throw new Error("Target credentials are missing from secure store");
     }
     console.log("[OV:store] sendAiPrompt: dispatching to SessionEngine");
-    const effectiveAutoAccept = session.autoAccept ?? stateRef.current.autoAcceptTools;
-    await sessionEngineRef.current!.sendPrompt(sessionId, { target, credentials, prompt, autoAccept: effectiveAutoAccept });
+    await sessionEngineRef.current!.sendPrompt(sessionId, { target, credentials, prompt });
     if (session.workspaceId) {
       touchWorkspace(session.workspaceId);
     }
@@ -1301,8 +1299,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     return imported;
   }, []);
 
-  const setAutoAcceptTools = useCallback((value: boolean): void => {
-    commit((prev) => ({ ...prev, autoAcceptTools: value }));
+  const setShowToolDetails = useCallback((value: boolean): void => {
+    commit((prev) => ({ ...prev, showToolDetails: value }));
   }, [commit]);
 
   const setNotificationsEnabled = useCallback((value: boolean): void => {
@@ -1374,11 +1372,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     commit((prev) => ({ ...prev, hiddenBuiltInPromptIds: [] }));
   }, [commit]);
 
-  const updateSessionAutoAccept = useCallback((sessionId: string, autoAccept: boolean): void => {
+  const updateSessionShowToolDetails = useCallback((sessionId: string, showToolDetails: boolean): void => {
     commit((prev) => ({
       ...prev,
       sessions: prev.sessions.map((s) =>
-        s.id === sessionId ? { ...s, autoAccept, updatedAt: new Date().toISOString() } : s,
+        s.id === sessionId ? { ...s, showToolDetails, updatedAt: new Date().toISOString() } : s,
       ),
     }));
   }, [commit]);
@@ -1427,8 +1425,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     compactSessionMessages,
     clearSessionMessages,
     importDaemonSessions,
-    autoAcceptTools: state.autoAcceptTools ?? false,
-    setAutoAcceptTools,
+    showToolDetails: state.showToolDetails ?? true,
+    setShowToolDetails,
     notificationsEnabled: state.notificationsEnabled ?? true,
     setNotificationsEnabled,
     speechLanguage: state.speechLanguage ?? "en-US",
@@ -1442,7 +1440,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     hideBuiltInPrompt,
     restoreBuiltInPrompts,
     hiddenBuiltInPromptIds: hiddenIds,
-    updateSessionAutoAccept,
+    updateSessionShowToolDetails,
   }), [
     ready,
     state.targets,
@@ -1450,7 +1448,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     state.workspaces,
     state.sessions,
     state.readinessByTarget,
-    state.autoAcceptTools,
+    state.showToolDetails,
     state.notificationsEnabled,
     state.speechLanguage,
     hiddenIds,
@@ -1493,7 +1491,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     compactSessionMessages,
     clearSessionMessages,
     importDaemonSessions,
-    setAutoAcceptTools,
+    setShowToolDetails,
     setNotificationsEnabled,
     addPromptTemplate,
     updatePromptTemplate,
@@ -1501,7 +1499,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     reorderPromptTemplates,
     hideBuiltInPrompt,
     restoreBuiltInPrompts,
-    updateSessionAutoAccept,
+    updateSessionShowToolDetails,
   ]);
 
   return <AppStoreContext value={value}>{children}</AppStoreContext>;

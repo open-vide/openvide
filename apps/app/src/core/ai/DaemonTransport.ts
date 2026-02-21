@@ -110,7 +110,6 @@ export class DaemonTransport {
       tool: string;
       cwd: string;
       model?: string;
-      autoAccept?: boolean;
       conversationId?: string;
     },
   ): Promise<{ daemonSessionId: string }> {
@@ -122,9 +121,8 @@ export class DaemonTransport {
     if (opts.model) {
       parts.push("--model", escapeShellArg(opts.model));
     }
-    if (opts.autoAccept) {
-      parts.push("--auto-accept");
-    }
+    // Always auto-accept — daemon is non-interactive
+    parts.push("--auto-accept");
     if (opts.conversationId) {
       parts.push("--conversation-id", escapeShellArg(opts.conversationId));
     }

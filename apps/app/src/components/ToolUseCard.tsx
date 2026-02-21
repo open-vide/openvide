@@ -49,9 +49,11 @@ function InlineDiff({ oldStr, newStr }: { oldStr: string; newStr: string }): JSX
 export function ToolUseCard({
   block,
   onSendResponse,
+  showToolDetails = false,
 }: {
   block: AiContentBlock;
   onSendResponse?: (text: string) => void;
+  showToolDetails?: boolean;
 }): JSX.Element {
   const navigation = useNavigation<any>();
   const toolName = block.toolName ?? "Tool";
@@ -94,7 +96,7 @@ export function ToolUseCard({
       >
         <CollapsibleCard
           title={`${toolName}: ${filePath || "file"}`}
-          defaultOpen={isRunning || (oldStr.length > 0 || newStr.length > 0)}
+          defaultOpen={showToolDetails || isRunning || (oldStr.length > 0 || newStr.length > 0)}
           titleRight={statusIndicator}
         >
           {stats && (
@@ -150,7 +152,7 @@ export function ToolUseCard({
       >
         <CollapsibleCard
           title={`Write: ${filePath || "file"}`}
-          defaultOpen={isRunning || content.length > 0}
+          defaultOpen={showToolDetails || isRunning || content.length > 0}
           titleRight={statusIndicator}
         >
           {contentLines > 0 && (
@@ -184,7 +186,7 @@ export function ToolUseCard({
       <View>
         <CollapsibleCard
           title={`Read: ${filePath || "file"}`}
-          defaultOpen={false}
+          defaultOpen={showToolDetails}
           titleRight={statusIndicator}
         >
           <Text style={{ fontFamily: FONT_FAMILY, fontSize: 12, color: "#8E8E93" }}>{filePath}</Text>
@@ -202,7 +204,7 @@ export function ToolUseCard({
       <View>
         <CollapsibleCard
           title="Bash"
-          defaultOpen={isRunning || !isCompleted}
+          defaultOpen={showToolDetails || isRunning || !isCompleted}
           titleRight={statusIndicator}
         >
           <MonoBlock text={command || JSON.stringify(input, null, 2)} language="bash" />
@@ -222,7 +224,7 @@ export function ToolUseCard({
       <View>
         <CollapsibleCard
           title={title}
-          defaultOpen={false}
+          defaultOpen={showToolDetails}
           titleRight={statusIndicator}
         >
           <MonoBlock text={JSON.stringify(input, null, 2)} />
@@ -238,7 +240,7 @@ export function ToolUseCard({
     <View>
       <CollapsibleCard
         title={toolName}
-        defaultOpen={isRunning || !isCompleted}
+        defaultOpen={showToolDetails || isRunning || !isCompleted}
         titleRight={statusIndicator}
       >
         <MonoBlock text={JSON.stringify(input, null, 2)} />

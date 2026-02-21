@@ -28,8 +28,8 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
   const {
     sessions,
     clearSessions,
-    autoAcceptTools,
-    setAutoAcceptTools,
+    showToolDetails,
+    setShowToolDetails,
     notificationsEnabled,
     setNotificationsEnabled,
     speechLanguage,
@@ -122,17 +122,17 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
       <SectionCard title="AI Behavior">
         <View className="flex-row items-center justify-between gap-3">
           <View className="flex-1 shrink">
-            <Text className="text-foreground text-[15px]">Auto-accept all tool actions</Text>
+            <Text className="text-foreground text-[15px]">Show tool details</Text>
+            <Text className="text-dimmed text-xs mt-0.5">
+              Expand tool cards to show file edits, commands, and other actions as they happen
+            </Text>
           </View>
           <Switch
-            value={autoAcceptTools}
-            onValueChange={setAutoAcceptTools}
+            value={showToolDetails}
+            onValueChange={setShowToolDetails}
             trackColor={{ false: muted, true: accent }}
           />
         </View>
-        <Text className="text-warning text-xs">
-          When enabled, AI tools can execute commands, edit files, and access the web without asking for permission.
-        </Text>
       </SectionCard>
 
       <SectionCard title="Notifications">

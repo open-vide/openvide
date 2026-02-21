@@ -27,7 +27,6 @@ export interface CliAdapter {
     allowedTools?: string[];
     messages?: AiMessage[];
     model?: string;
-    autoAccept?: boolean;
   }): string;
   createParseContext?(): Record<string, unknown>;
   parseLine(jsonLine: string, context?: Record<string, unknown>): CliStreamEvent[];

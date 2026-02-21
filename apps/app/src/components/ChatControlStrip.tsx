@@ -10,25 +10,25 @@ interface ChatControlStripProps {
   session: AiSession;
   usagePercent: number;
   hasContext: boolean;
-  autoAcceptGlobal: boolean;
+  showToolDetailsGlobal: boolean;
   onModelChange: (model: string) => void;
-  onAutoAcceptChange: (value: boolean) => void;
+  onShowToolDetailsChange: (value: boolean) => void;
 }
 
 export function ChatControlStrip({
   session,
   usagePercent,
   hasContext,
-  autoAcceptGlobal,
+  showToolDetailsGlobal,
   onModelChange,
-  onAutoAcceptChange,
+  onShowToolDetailsChange,
 }: ChatControlStripProps): JSX.Element {
   const { accent, mutedForeground } = useThemeColors();
   const [showModelPicker, setShowModelPicker] = useState(false);
 
   const models = getModelsForTool(session.tool);
   const currentModel = models.find((m) => m.id === session.model) ?? models[0];
-  const effectiveAutoAccept = session.autoAccept ?? autoAcceptGlobal;
+  const effectiveShowDetails = session.showToolDetails ?? showToolDetailsGlobal;
 
   return (
     <View className="flex-row items-center gap-1.5">
@@ -58,20 +58,20 @@ export function ChatControlStrip({
           <Icon name="chevron-down" size={10} color={mutedForeground} />
         </Pressable>
 
-        {/* Auto-accept chip */}
+        {/* Tool details chip */}
         <Pressable
           className={cn(
             "flex-row items-center gap-1.5 rounded-full px-3 py-1.5 active:opacity-80",
-            effectiveAutoAccept ? "bg-warning/15" : "bg-muted",
+            effectiveShowDetails ? "bg-accent/15" : "bg-muted",
           )}
-          onPress={() => onAutoAcceptChange(!effectiveAutoAccept)}
+          onPress={() => onShowToolDetailsChange(!effectiveShowDetails)}
         >
-          <Icon name="zap" size={12} color={effectiveAutoAccept ? "#F5A623" : mutedForeground} />
+          <Icon name="code" size={12} color={effectiveShowDetails ? accent : mutedForeground} />
           <Text className={cn(
             "text-[12px] font-medium",
-            effectiveAutoAccept ? "text-warning" : "text-muted-foreground",
+            effectiveShowDetails ? "text-accent" : "text-muted-foreground",
           )}>
-            Auto-accept
+            Details
           </Text>
         </Pressable>
       </ScrollView>

@@ -19,9 +19,8 @@ export const claudeAdapter: CliAdapter = {
     if (input.model) {
       parts.push("--model", escapeShellArg(input.model));
     }
-    if (input.autoAccept) {
-      parts.push("--dangerously-skip-permissions");
-    }
+    // Always skip permissions — daemon is non-interactive
+    parts.push("--dangerously-skip-permissions");
     return parts.join(" ");
   },
 

@@ -36,6 +36,7 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
     subscribeAiSession,
     targets,
     speechLanguage,
+    showToolDetails,
   } = useAppStore();
 
   const insets = useSafeAreaInsets();
@@ -140,6 +141,7 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
   const usagePercent = hasContext
     ? Math.max(0, Math.min(session?.contextPercentUsed ?? ((contextUsed / contextWindow) * 100), 100))
     : 0;
+  const effectiveShowToolDetails = session?.showToolDetails ?? showToolDetails;
 
   if (!session) {
     return (
@@ -185,6 +187,7 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
             message={item}
             onMenuPress={handleMenuPress}
             onSendResponse={handleSend}
+            showToolDetails={effectiveShowToolDetails}
           />
         )}
         windowSize={10}

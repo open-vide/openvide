@@ -41,11 +41,13 @@ export const AiContentBlockView = React.memo(function AiContentBlockView({
   isStreaming,
   isLastBlock,
   onSendResponse,
+  showToolDetails,
 }: {
   block: AiContentBlock;
   isStreaming?: boolean;
   isLastBlock?: boolean;
   onSendResponse?: (text: string) => void;
+  showToolDetails?: boolean;
 }): JSX.Element {
   const navigation = useNavigation<any>();
   const { foreground, mutedForeground, accent, muted, border } = useThemeColors();
@@ -202,7 +204,7 @@ export const AiContentBlockView = React.memo(function AiContentBlockView({
     }
 
     case "tool_use":
-      return <ToolUseCard block={block} onSendResponse={onSendResponse} />;
+      return <ToolUseCard block={block} onSendResponse={onSendResponse} showToolDetails={showToolDetails} />;
 
     case "tool_result": {
       const resultText = block.result ?? "";
