@@ -5,6 +5,7 @@ import * as os from "node:os";
 
 export interface KeygenResult {
   privateKey: string;   // PEM (PKCS#8)
+  seed: string;         // raw 32-byte ed25519 seed, base64
   publicKey: string;    // ssh-ed25519 format
   fingerprint: string;  // SHA256:...
 }
@@ -47,7 +48,11 @@ export function generateKeyPair(comment: string): KeygenResult {
     privateKeyEncoding: { type: "pkcs8", format: "pem" },
   });
 
+  const privateKeyDer = crypto.createPrivateKey(privateKey).export({ type: "pkcs8", format: "der" });
   const publicKeyDer = crypto.createPublicKey(publicKey).export({ type: "spki", format: "der" });
+
+  // ed25519 PKCS#8 DER is 48 bytes: 16-byte fixed prefix + 32-byte seed
+  const seed = privateKeyDer.subarray(privateKeyDer.length - 32).toString("base64");
 
   const openSSHPubKey = toOpenSSHPublicKey(publicKeyDer, comment);
   const fingerprint = computeFingerprint(publicKeyDer);
@@ -72,6 +77,7 @@ export function generateKeyPair(comment: string): KeygenResult {
 
   return {
     privateKey,
+    seed,
     publicKey: openSSHPubKey,
     fingerprint,
   };

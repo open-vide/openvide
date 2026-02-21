@@ -101,12 +101,14 @@ async function main(): Promise<void> {
     const username = flags.get("username") ?? process.env.USER ?? "root";
 
     const result = generateKeyPair(comment);
+    // Compact payload: short keys + raw seed (44 chars) instead of full PEM (~120 chars)
+    // This keeps the QR small enough to scan from a phone screen
     const payload = JSON.stringify({
       v: 1,
-      host,
-      port,
-      username,
-      privateKey: result.privateKey,
+      h: host,
+      p: port,
+      u: username,
+      k: result.seed,
     });
 
     // Print QR to stderr (visible in terminal)
