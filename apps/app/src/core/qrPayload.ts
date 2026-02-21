@@ -1,9 +1,9 @@
 export interface QrConnectionPayload {
   v: 1;
-  host: string;
-  port: number;
-  username: string;
   privateKey: string;
+  host?: string;
+  port?: number;
+  username?: string;
 }
 
 // ed25519 PKCS#8 DER prefix (16 bytes, fixed for all ed25519 keys)
@@ -48,15 +48,17 @@ export function decodeQrPayload(raw: string): QrConnectionPayload | null {
     const username = (obj.u ?? obj.username) as string | undefined;
     const key = (obj.k ?? obj.privateKey) as string | undefined;
 
-    if (typeof host !== "string" || host.length === 0) return null;
-    if (typeof port !== "number" || port < 1 || port > 65535) return null;
-    if (typeof username !== "string" || username.length === 0) return null;
     if (typeof key !== "string" || key.length === 0) return null;
 
     // Determine if key is a raw seed or full PEM
     const privateKey = key.includes("PRIVATE KEY") ? key : seedToPem(key);
 
-    return { v: 1, host, port, username, privateKey };
+    // Host, port, username are optional auto-fill fields
+    const validHost = typeof host === "string" && host.length > 0 ? host : undefined;
+    const validPort = typeof port === "number" && port >= 1 && port <= 65535 ? port : undefined;
+    const validUsername = typeof username === "string" && username.length > 0 ? username : undefined;
+
+    return { v: 1, privateKey, host: validHost, port: validPort, username: validUsername };
   } catch {
     return null;
   }

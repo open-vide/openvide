@@ -47,12 +47,14 @@ export function AddHostSheet({ navigation, route }: Props): JSX.Element {
   // Auto-fill from QR payload
   useEffect(() => {
     if (!qrPayload) return;
-    setHost(qrPayload.host);
-    setPort(String(qrPayload.port));
-    setUsername(qrPayload.username);
-    setLabel(qrPayload.host);
     setAuthMethod("privateKey");
     setPrivateKey(qrPayload.privateKey);
+    if (qrPayload.host) {
+      setHost(qrPayload.host);
+      setLabel(qrPayload.host);
+    }
+    if (qrPayload.port) setPort(String(qrPayload.port));
+    if (qrPayload.username) setUsername(qrPayload.username);
   }, [qrPayload]);
   const [phase, setPhase] = useState<ConnectionPhase>("idle");
   const [error, setError] = useState<string | null>(null);

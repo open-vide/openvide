@@ -11,16 +11,21 @@ type Props = NativeStackScreenProps<RootStackParamList, "QrScannerSheet">;
 export function QrScannerSheet({ navigation }: Props): JSX.Element {
   const [permission, requestPermission] = useCameraPermissions();
   const [error, setError] = useState<string | null>(null);
+  const [lastScanned, setLastScanned] = useState<string | null>(null);
   const scannedRef = useRef(false);
 
   const handleBarcodeScanned = useCallback(
     ({ data }: { data: string }) => {
+      console.log("[OV:qr] barcode scanned, data length:", data.length, "preview:", data.slice(0, 80));
       if (scannedRef.current) return;
+      setLastScanned(data.slice(0, 120));
       const payload = decodeQrPayload(data);
       if (!payload) {
+        console.warn("[OV:qr] decode failed for:", data.slice(0, 200));
         setError("Invalid QR code. Expected an OpenVide connection QR.");
         return;
       }
+      console.log("[OV:qr] decoded payload:", payload.host, payload.port, payload.username);
       scannedRef.current = true;
       navigation.goBack();
       navigation.navigate("AddHostSheet", { qrPayload: payload });
@@ -78,18 +83,26 @@ export function QrScannerSheet({ navigation }: Props): JSX.Element {
         </Text>
       </View>
 
-      {error && (
+      {(error || lastScanned) && (
         <View className="absolute bottom-20 left-4 right-4 bg-card rounded-xl p-4">
-          <Text className="text-error-bright text-sm text-center">{error}</Text>
-          <Pressable
-            className="mt-3 items-center"
-            onPress={() => {
-              setError(null);
-              scannedRef.current = false;
-            }}
-          >
-            <Text className="text-accent font-semibold text-sm">Try Again</Text>
-          </Pressable>
+          {error && <Text className="text-error-bright text-sm text-center">{error}</Text>}
+          {lastScanned && (
+            <Text className="text-muted-foreground text-xs text-center mt-2 font-mono" numberOfLines={3}>
+              {lastScanned}
+            </Text>
+          )}
+          {error && (
+            <Pressable
+              className="mt-3 items-center"
+              onPress={() => {
+                setError(null);
+                setLastScanned(null);
+                scannedRef.current = false;
+              }}
+            >
+              <Text className="text-accent font-semibold text-sm">Try Again</Text>
+            </Pressable>
+          )}
         </View>
       )}
     </View>

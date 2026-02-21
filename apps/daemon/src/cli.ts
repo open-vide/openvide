@@ -96,23 +96,21 @@ async function main(): Promise<void> {
   if (command === "keygen") {
     const flags = parseArgs(args.slice(1));
     const comment = flags.get("comment") ?? "openvide-daemon-keygen";
-    const host = flags.get("host") ?? "localhost";
-    const port = parseInt(flags.get("port") ?? "22", 10);
-    const username = flags.get("username") ?? process.env.USER ?? "root";
+    const host = flags.get("host");
+    const portStr = flags.get("port");
+    const port = portStr ? parseInt(portStr, 10) : undefined;
+    const username = flags.get("username");
 
     const result = generateKeyPair(comment);
-    // Compact payload: short keys + raw seed (44 chars) instead of full PEM (~120 chars)
-    // This keeps the QR small enough to scan from a phone screen
-    const payload = JSON.stringify({
-      v: 1,
-      h: host,
-      p: port,
-      u: username,
-      k: result.seed,
-    });
+    // Compact payload: only key is required, host/port/username are optional auto-fill
+    const qrData: Record<string, unknown> = { v: 1, k: result.seed };
+    if (host) qrData.h = host;
+    if (port) qrData.p = port;
+    if (username) qrData.u = username;
+    const payload = JSON.stringify(qrData);
 
     // Print QR to stderr (visible in terminal)
-    const qrLines = encodeQR(payload);
+    const qrLines = await encodeQR(payload);
     for (const line of qrLines) {
       process.stderr.write(line + "\n");
     }
@@ -123,9 +121,9 @@ async function main(): Promise<void> {
     // Print JSON to stdout (machine consumption)
     printJson({
       ok: true,
-      host,
-      port,
-      username,
+      ...(host ? { host } : {}),
+      ...(port ? { port } : {}),
+      ...(username ? { username } : {}),
       fingerprint: result.fingerprint,
       publicKey: result.publicKey,
       privateKey: result.privateKey,
