@@ -495,7 +495,27 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     }));
   }, [commit]);
 
+  const tryRemoveDaemonSession = useCallback(async (session: AiSession): Promise<void> => {
+    if (!session.daemonSessionId) return;
+    const target = stateRef.current.targets.find((t) => t.id === session.targetId);
+    if (!target) return;
+    try {
+      const credentials = await loadTargetCredentials(target.id);
+      if (!credentials) return;
+      await transportRef.current!.removeSession(target, credentials, session.daemonSessionId);
+    } catch (err) {
+      console.warn("[OV:store] daemon session remove failed (non-critical):", err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
   const deleteTarget = useCallback(async (targetId: string): Promise<void> => {
+    // Daemon cleanup must happen before deleteTargetCredentials since it needs SSH credentials
+    const targetSessions = stateRef.current.sessions.filter((s) => s.targetId === targetId);
+    for (const session of targetSessions) {
+      void tryRemoveDaemonSession(session);
+      await sessionEngineRef.current!.removeSession(session.id);
+    }
+
     await engineRef.current!.resetTargetSession(targetId);
     await deleteTargetCredentials(targetId);
 
@@ -511,7 +531,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
         readinessByTarget,
       };
     });
-  }, [commit]);
+  }, [commit, tryRemoveDaemonSession]);
 
   const startCommandRun = useCallback(async (input: {
     targetId: string;
@@ -795,12 +815,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
   }, [commit]);
 
   const deleteWorkspace = useCallback(async (workspaceId: string): Promise<void> => {
-    const linkedSessionIds = stateRef.current.sessions
-      .filter((session) => session.workspaceId === workspaceId)
-      .map((session) => session.id);
+    const linkedSessions = stateRef.current.sessions
+      .filter((session) => session.workspaceId === workspaceId);
 
-    for (const sessionId of linkedSessionIds) {
-      await sessionEngineRef.current!.removeSession(sessionId);
+    for (const session of linkedSessions) {
+      void tryRemoveDaemonSession(session);
+      await sessionEngineRef.current!.removeSession(session.id);
     }
 
     commit((prev) => ({
@@ -808,7 +828,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
       workspaces: prev.workspaces.filter((workspace) => workspace.id !== workspaceId),
       sessions: prev.sessions.filter((session) => session.workspaceId !== workspaceId),
     }));
-  }, [commit]);
+  }, [commit, tryRemoveDaemonSession]);
 
   const listWorkspaceChats = useCallback(async (workspaceId: string): Promise<WorkspaceChatInfo[]> => {
     const workspace = stateRef.current.workspaces.find((w) => w.id === workspaceId);
@@ -1141,16 +1161,25 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
 
   const deleteSession = useCallback(async (sessionId: string): Promise<void> => {
     console.log("[OV:store] deleteSession:", sessionId);
+    const session = stateRef.current.sessions.find((s) => s.id === sessionId);
+    if (session) {
+      void tryRemoveDaemonSession(session);
+    }
     await sessionEngineRef.current!.removeSession(sessionId);
     commit((prev) => ({
       ...prev,
       sessions: prev.sessions.filter((s) => s.id !== sessionId),
     }));
-  }, [commit]);
+  }, [commit, tryRemoveDaemonSession]);
 
   const clearSessions = useCallback(async (): Promise<void> => {
+    const allSessions = stateRef.current.sessions;
+    for (const session of allSessions) {
+      void tryRemoveDaemonSession(session);
+      await sessionEngineRef.current!.removeSession(session.id);
+    }
     commit((prev) => ({ ...prev, sessions: [] }));
-  }, [commit]);
+  }, [commit, tryRemoveDaemonSession]);
 
   const updateSessionModel = useCallback((sessionId: string, model: string): void => {
     sessionEngineRef.current!.updateModel(sessionId, model);

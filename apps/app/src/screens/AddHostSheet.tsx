@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppStore } from "../state/AppStoreContext";
@@ -31,8 +31,9 @@ function validateHost(value: string): string | null {
 
 type ConnectionPhase = "idle" | "testing" | "saving";
 
-export function AddHostSheet({ navigation }: Props): JSX.Element {
+export function AddHostSheet({ navigation, route }: Props): JSX.Element {
   const { createTarget, testConnectionBeforeSave } = useAppStore();
+  const qrPayload = route.params?.qrPayload;
 
   const [label, setLabel] = useState("");
   const [host, setHost] = useState("");
@@ -42,6 +43,17 @@ export function AddHostSheet({ navigation }: Props): JSX.Element {
   const [password, setPassword] = useState("");
   const [privateKey, setPrivateKey] = useState("");
   const [passphrase, setPassphrase] = useState("");
+
+  // Auto-fill from QR payload
+  useEffect(() => {
+    if (!qrPayload) return;
+    setHost(qrPayload.host);
+    setPort(String(qrPayload.port));
+    setUsername(qrPayload.username);
+    setLabel(qrPayload.host);
+    setAuthMethod("privateKey");
+    setPrivateKey(qrPayload.privateKey);
+  }, [qrPayload]);
   const [phase, setPhase] = useState<ConnectionPhase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -221,6 +233,23 @@ export function AddHostSheet({ navigation }: Props): JSX.Element {
               spellCheck={false}
             />
           </>
+        )}
+
+        {authMethod !== "password" && (
+          <View className="flex-row items-center gap-3">
+            <View className="flex-1 h-[1px] bg-border" />
+            <Text className="text-muted-foreground text-xs">or</Text>
+            <View className="flex-1 h-[1px] bg-border" />
+          </View>
+        )}
+
+        {authMethod !== "password" && (
+          <Pressable
+            className="bg-muted rounded-lg px-4 py-2.5 items-center active:opacity-80"
+            onPress={() => navigation.navigate("QrScannerSheet")}
+          >
+            <Text className="text-accent font-semibold text-[14px]">Scan QR Code</Text>
+          </Pressable>
         )}
 
         {authMethod !== "password" && (

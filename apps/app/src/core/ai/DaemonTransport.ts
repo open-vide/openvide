@@ -340,6 +340,25 @@ export class DaemonTransport {
     }
   }
 
+  async removeSession(
+    target: TargetProfile,
+    credentials: SshCredentials,
+    daemonSessionId: string,
+  ): Promise<void> {
+    const cmd = [
+      "openvide-daemon", "session", "remove",
+      "--id", escapeShellArg(daemonSessionId),
+    ].join(" ");
+    const stdout = await this.execDaemonCommand(target, credentials, cmd);
+    const resp = parseIpcResponse(stdout);
+    if (!resp["ok"]) {
+      const error = (resp["error"] as string) ?? "";
+      if (!error.includes("not found")) {
+        throw new Error(error || "Daemon remove session failed");
+      }
+    }
+  }
+
   async getSession(
     target: TargetProfile,
     credentials: SshCredentials,

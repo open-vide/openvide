@@ -13,6 +13,7 @@ import { NewSessionSheet } from "./src/screens/NewSessionSheet";
 import { CreateWorkspaceSheet } from "./src/screens/CreateWorkspaceSheet";
 import { NewWorkspaceChatSheet } from "./src/screens/NewWorkspaceChatSheet";
 import { AddHostSheet } from "./src/screens/AddHostSheet";
+import { QrScannerSheet } from "./src/screens/QrScannerSheet";
 import { DirectoryPicker } from "./src/screens/DirectoryPicker";
 import { PromptLibraryScreen } from "./src/screens/PromptLibraryScreen";
 import { AppStoreProvider } from "./src/state/AppStoreContext";
@@ -108,6 +109,16 @@ function RootNavigator(): JSX.Element {
             component={AddHostSheet}
             options={({ navigation }) => ({
               title: "Add Host",
+              headerLeft: () => (
+                <ModalCloseButton onPress={() => navigation.goBack()} color={foreground} />
+              ),
+            })}
+          />
+          <RootStack.Screen
+            name="QrScannerSheet"
+            component={QrScannerSheet}
+            options={({ navigation }) => ({
+              title: "Scan QR Code",
               headerLeft: () => (
                 <ModalCloseButton onPress={() => navigation.goBack()} color={foreground} />
               ),

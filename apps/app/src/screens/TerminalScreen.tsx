@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppStore } from "../state/AppStoreContext";
-import { buildTerminalDisplay } from "../core/terminalView";
+import { buildColoredReadableDisplay, type TerminalColoredLine } from "../core/terminalView";
 import { cn } from "../lib/utils";
 import type { RunRecord } from "../core/types";
 import type { MainStackParamList } from "../navigation/types";
@@ -25,6 +25,7 @@ export function TerminalScreen({ route }: Props): JSX.Element {
   const [command, setCommand] = useState("");
   const [timeout, setTimeout_] = useState("300");
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [terminalLines, setTerminalLines] = useState<TerminalColoredLine[]>([]);
   const [terminalText, setTerminalText] = useState("");
   const [runStatus, setRunStatus] = useState<RunRecord["status"] | null>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -35,7 +36,8 @@ export function TerminalScreen({ route }: Props): JSX.Element {
       return;
     }
     const unsub = subscribeRun(activeRunId, (run) => {
-      const display = buildTerminalDisplay(run, { mode: "readable", maxLines: 500 });
+      const display = buildColoredReadableDisplay(run, { maxLines: 500 });
+      setTerminalLines(display.lines);
       setTerminalText(display.text);
       setRunStatus(run.status);
     });
@@ -61,6 +63,7 @@ export function TerminalScreen({ route }: Props): JSX.Element {
         sourceManagedEnv: true,
       });
       setActiveRunId(run.id);
+      setTerminalLines([]);
       setTerminalText("");
       setRunStatus(run.status);
       setCommand("");
@@ -100,7 +103,28 @@ export function TerminalScreen({ route }: Props): JSX.Element {
         className="flex-1 bg-[#1E1E1E]"
         contentContainerStyle={{ padding: 12 }}
       >
-        <Text style={{ color: "#D4D4D4" }} className="font-mono text-xs leading-[18px]">{terminalText || "Terminal ready."}</Text>
+        {terminalLines.length === 0 ? (
+          <Text style={{ color: "#D4D4D4" }} className="font-mono text-xs leading-[18px]">Terminal ready.</Text>
+        ) : (
+          terminalLines.map((line, lineIdx) => (
+            <Text key={lineIdx} className="font-mono text-xs leading-[18px]">
+              {line.length === 0 ? "\n" : line.map((span, spanIdx) => (
+                <Text
+                  key={spanIdx}
+                  style={{
+                    color: span.attrs.fg ?? "#D4D4D4",
+                    backgroundColor: span.attrs.bg,
+                    fontWeight: span.attrs.bold ? "700" : undefined,
+                    fontStyle: span.attrs.italic ? "italic" : undefined,
+                    textDecorationLine: span.attrs.underline ? "underline" : undefined,
+                    opacity: span.attrs.dim ? 0.6 : undefined,
+                  }}
+                >{span.text}</Text>
+              ))}
+              {"\n"}
+            </Text>
+          ))
+        )}
       </ScrollView>
 
       <View className="border-t border-border bg-card p-3 gap-2">

@@ -2,6 +2,8 @@ import { ensureDaemon, isDaemonRunning, stopDaemon } from "./daemon.js";
 import { sendCommand } from "./ipc.js";
 import { readOutputLines, tailOutput } from "./outputStore.js";
 import { loadState } from "./stateStore.js";
+import { generateKeyPair } from "./keygen.js";
+import { encodeQR } from "./qrText.js";
 import type { IpcResponse, Tool } from "./types.js";
 
 const DAEMON_VERSION = "0.1.1";
@@ -24,6 +26,7 @@ Usage:
   openvide-daemon session history --tool <claude|codex> --resume-id <id> [--cwd <path>] [--limit-lines <n>]
   openvide-daemon session wait-idle --id <id> [--timeout-ms <n>]
   openvide-daemon session remove --id <id>
+  openvide-daemon keygen [--comment <c>] [--host <h>] [--port <p>] [--username <u>]
   openvide-daemon stop`);
   process.exit(1);
 }
@@ -86,6 +89,45 @@ async function main(): Promise<void> {
     ensureDaemon();
     const res = await sendCommand({ cmd: "health" });
     printJson(res);
+    return;
+  }
+
+  // ── keygen ──
+  if (command === "keygen") {
+    const flags = parseArgs(args.slice(1));
+    const comment = flags.get("comment") ?? "openvide-daemon-keygen";
+    const host = flags.get("host") ?? "localhost";
+    const port = parseInt(flags.get("port") ?? "22", 10);
+    const username = flags.get("username") ?? process.env.USER ?? "root";
+
+    const result = generateKeyPair(comment);
+    const payload = JSON.stringify({
+      v: 1,
+      host,
+      port,
+      username,
+      privateKey: result.privateKey,
+    });
+
+    // Print QR to stderr (visible in terminal)
+    const qrLines = encodeQR(payload);
+    for (const line of qrLines) {
+      process.stderr.write(line + "\n");
+    }
+    process.stderr.write(`\nFingerprint: ${result.fingerprint}\n`);
+    process.stderr.write(`Public key added to ~/.ssh/authorized_keys\n`);
+    process.stderr.write(`Scan the QR code above with the OpenVide app to connect.\n\n`);
+
+    // Print JSON to stdout (machine consumption)
+    printJson({
+      ok: true,
+      host,
+      port,
+      username,
+      fingerprint: result.fingerprint,
+      publicKey: result.publicKey,
+      privateKey: result.privateKey,
+    });
     return;
   }
 

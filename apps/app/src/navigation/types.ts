@@ -1,4 +1,5 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
+import type { QrConnectionPayload } from "../core/qrPayload";
 
 export type MainStackParamList = {
   // Root screens (sidebar sections)
@@ -19,7 +20,8 @@ export type ModalStackParamList = {
   NewSessionSheet: { selectedDirectory?: string } | undefined;
   CreateWorkspaceSheet: { selectedDirectory?: string } | undefined;
   NewWorkspaceChatSheet: { workspaceId: string } | undefined;
-  AddHostSheet: undefined;
+  AddHostSheet: { qrPayload?: QrConnectionPayload } | undefined;
+  QrScannerSheet: undefined;
   DirectoryPicker: { targetId: string; currentPath?: string; returnTo?: "NewSessionSheet" | "CreateWorkspaceSheet" };
   PromptLibrarySheet: undefined;
 };

@@ -45,6 +45,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ],
       "expo-secure-store",
       [
+        "expo-camera",
+        {
+          cameraPermission:
+            "Allow $(PRODUCT_NAME) to use the camera to scan QR codes for host setup.",
+        },
+      ],
+      [
         "expo-local-authentication",
         {
           faceIDPermission:

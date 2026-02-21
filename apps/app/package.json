@@ -21,6 +21,7 @@
     "@react-navigation/native-stack": "^7.3.0",
     "clsx": "^2.1.0",
     "expo": "^54.0.33",
+    "expo-camera": "~17.0.10",
     "expo-clipboard": "~8.0.8",
     "expo-dev-client": "~6.0.20",
     "expo-glass-effect": "~0.1.9",
