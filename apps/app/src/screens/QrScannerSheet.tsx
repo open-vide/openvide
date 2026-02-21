@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { decodeQrPayload } from "../core/qrPayload";
@@ -53,16 +53,16 @@ export function QrScannerSheet({ navigation }: Props): JSX.Element {
   }
 
   return (
-    <View className="flex-1 bg-black">
+    <View style={styles.container}>
       <CameraView
-        className="flex-1"
+        style={StyleSheet.absoluteFill}
         facing="back"
         barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
         onBarcodeScanned={handleBarcodeScanned}
       />
 
       {/* Scanning overlay */}
-      <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
+      <View style={styles.overlayCenter} pointerEvents="none">
         <View
           style={{
             width: 250,
@@ -95,3 +95,15 @@ export function QrScannerSheet({ navigation }: Props): JSX.Element {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  overlayCenter: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
