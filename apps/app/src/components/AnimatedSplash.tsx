@@ -23,19 +23,15 @@ export function AnimatedSplash({ children }: Props): JSX.Element {
   const hasFinished = useRef(false);
 
   // Once overlay is laid out and painted, hide the native splash.
-  // This eliminates the flicker: the Lottie overlay is visually
-  // present before the native splash disappears.
+  // Only start the Lottie after hideAsync resolves (native splash
+  // fully gone), so the animation plays from frame 0 on screen.
   const onOverlayLayout = useCallback(() => {
     if (overlayReady) return;
     setOverlayReady(true);
-    SplashScreen.hideAsync();
-  }, [overlayReady]);
-
-  // Start Lottie after the native splash is gone
-  useEffect(() => {
-    if (!overlayReady) return;
-    startTime.current = Date.now();
-    setAnimationStarted(true);
+    SplashScreen.hideAsync().then(() => {
+      startTime.current = Date.now();
+      setAnimationStarted(true);
+    });
   }, [overlayReady]);
 
   // Smooth fade-out then unmount overlay
