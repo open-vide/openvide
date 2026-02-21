@@ -1,5 +1,5 @@
 import type { SshCredentials, TargetProfile } from "../types";
-import { getHomeDirectory, listDirectory, type RemoteFileEntry } from "./fileOps";
+import { getHomeDirectory, listDirectory, searchFiles, type RemoteFileEntry } from "./fileOps";
 import type { NativeSshClient } from "./nativeSsh";
 
 export class RequestSupersededError extends Error {
@@ -129,6 +129,12 @@ export class RemoteFsBrowserController {
       const value = this.directoriesOnly ? entries.filter((entry) => entry.isDirectory) : entries;
       this.pathCache.set(path, { entries: value, at: Date.now() });
       return value;
+    });
+  }
+
+  async search(basePath: string, query: string): Promise<RemoteFileEntry[]> {
+    return await this.runLatest(async (signal, creds) => {
+      return await searchFiles(this.ssh, this.target, creds, basePath, query, { signal });
     });
   }
 

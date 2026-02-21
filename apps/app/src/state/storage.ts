@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PersistedState } from "../core/types";
 
 const STORAGE_KEY = "open-vide/state";
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 const EMPTY_STATE: PersistedState = {
   version: CURRENT_VERSION,
@@ -13,6 +13,7 @@ const EMPTY_STATE: PersistedState = {
   sessions: [],
   promptTemplates: [],
   promptFlows: [],
+  hiddenBuiltInPromptIds: [],
   autoAcceptTools: false,
   notificationsEnabled: true,
   speechLanguage: "en-US",
@@ -46,6 +47,14 @@ function migrate(state: Record<string, unknown>): PersistedState {
     state["version"] = 3;
   }
 
+  // v3 → v4: add hiddenBuiltInPromptIds
+  if (version < 4) {
+    if (!Array.isArray(state["hiddenBuiltInPromptIds"])) {
+      state["hiddenBuiltInPromptIds"] = [];
+    }
+    state["version"] = 4;
+  }
+
   return {
     version: CURRENT_VERSION,
     targets: (state["targets"] as PersistedState["targets"]) ?? [],
@@ -55,6 +64,7 @@ function migrate(state: Record<string, unknown>): PersistedState {
     sessions: (state["sessions"] as PersistedState["sessions"]) ?? [],
     promptTemplates: (state["promptTemplates"] as PersistedState["promptTemplates"]) ?? [],
     promptFlows: (state["promptFlows"] as PersistedState["promptFlows"]) ?? [],
+    hiddenBuiltInPromptIds: (state["hiddenBuiltInPromptIds"] as string[]) ?? [],
     autoAcceptTools: (state["autoAcceptTools"] as boolean) ?? false,
     notificationsEnabled: (state["notificationsEnabled"] as boolean) ?? true,
     speechLanguage: (state["speechLanguage"] as string) ?? "en-US",

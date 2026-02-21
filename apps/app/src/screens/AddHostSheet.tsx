@@ -5,7 +5,7 @@ import { useAppStore } from "../state/AppStoreContext";
 import { cn } from "../lib/utils";
 import type { AuthMethod } from "../core/types";
 import type { RootStackParamList } from "../navigation/types";
-import { colors } from "../constants/colors";
+import { useThemeColors } from "../constants/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddHostSheet">;
 
@@ -33,6 +33,7 @@ type ConnectionPhase = "idle" | "testing" | "saving";
 
 export function AddHostSheet({ navigation, route }: Props): JSX.Element {
   const { createTarget, testConnectionBeforeSave } = useAppStore();
+  const { accent, dimmed } = useThemeColors();
   const qrPayload = route.params?.qrPayload;
 
   const [label, setLabel] = useState("");
@@ -149,7 +150,7 @@ export function AddHostSheet({ navigation, route }: Props): JSX.Element {
           value={label}
           onChangeText={setLabel}
           placeholder="My Server"
-          placeholderTextColor={colors.dimmed}
+          placeholderTextColor={dimmed}
         />
 
         <Text className="text-foreground text-[15px] font-bold mt-1">Host</Text>
@@ -159,7 +160,7 @@ export function AddHostSheet({ navigation, route }: Props): JSX.Element {
           onChangeText={setHost}
           onBlur={() => markTouched("host")}
           placeholder="192.168.1.100"
-          placeholderTextColor={colors.dimmed}
+          placeholderTextColor={dimmed}
           autoCapitalize="none"
           autoCorrect={false}
         />
@@ -171,7 +172,7 @@ export function AddHostSheet({ navigation, route }: Props): JSX.Element {
           value={port}
           onChangeText={setPort}
           placeholder="22"
-          placeholderTextColor={colors.dimmed}
+          placeholderTextColor={dimmed}
           keyboardType="number-pad"
         />
         {portError && <Text className="text-error-bright text-xs mt-0.5">{portError}</Text>}
@@ -182,7 +183,7 @@ export function AddHostSheet({ navigation, route }: Props): JSX.Element {
           value={username}
           onChangeText={setUsername}
           placeholder="root"
-          placeholderTextColor={colors.dimmed}
+          placeholderTextColor={dimmed}
           autoCapitalize="none"
           autoCorrect={false}
         />
@@ -213,7 +214,7 @@ export function AddHostSheet({ navigation, route }: Props): JSX.Element {
               value={password}
               onChangeText={setPassword}
               placeholder="Password"
-              placeholderTextColor={colors.dimmed}
+              placeholderTextColor={dimmed}
               secureTextEntry
             />
           </>
@@ -227,7 +228,7 @@ export function AddHostSheet({ navigation, route }: Props): JSX.Element {
               value={privateKey}
               onChangeText={setPrivateKey}
               placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
-              placeholderTextColor={colors.dimmed}
+              placeholderTextColor={dimmed}
               multiline
               textAlignVertical="top"
               autoCapitalize="none"
@@ -262,7 +263,7 @@ export function AddHostSheet({ navigation, route }: Props): JSX.Element {
               value={passphrase}
               onChangeText={setPassphrase}
               placeholder="Key passphrase"
-              placeholderTextColor={colors.dimmed}
+              placeholderTextColor={dimmed}
               secureTextEntry
             />
           </>
@@ -270,7 +271,7 @@ export function AddHostSheet({ navigation, route }: Props): JSX.Element {
 
         {phase === "testing" && (
           <View className="flex-row items-center gap-2 mt-1">
-            <ActivityIndicator size="small" color="#C4704B" />
+            <ActivityIndicator size="small" color={accent} />
             <Text className="text-muted-foreground text-[13px]">Testing SSH connection...</Text>
           </View>
         )}

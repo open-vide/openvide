@@ -9,6 +9,7 @@ interface CodeBlockProps {
   showLineNumbers?: boolean;
   showCopyButton?: boolean;
   maxLines?: number;
+  selectable?: boolean;
 }
 
 const FONT_FAMILY = Platform.select({ ios: "Menlo", android: "monospace" });
@@ -27,6 +28,7 @@ export const CodeBlock = React.memo(function CodeBlock({
   showLineNumbers = false,
   showCopyButton = true,
   maxLines,
+  selectable = false,
 }: CodeBlockProps): JSX.Element {
   const trimmedCode = code.endsWith("\n") ? code.slice(0, -1) : code;
   const lines = tokenize(trimmedCode, language ?? "");
@@ -74,7 +76,7 @@ export const CodeBlock = React.memo(function CodeBlock({
                   {lineIdx + 1}
                 </Text>
               )}
-              <Text style={{ flexShrink: 1 }}>
+              <Text style={{ flexShrink: 1 }} selectable={selectable}>
                 {lineTokens.length === 0 ? (
                   <Text style={{ color: ONE_DARK_COLORS.plain, fontFamily: FONT_FAMILY, fontSize: 13 }}>{" "}</Text>
                 ) : (

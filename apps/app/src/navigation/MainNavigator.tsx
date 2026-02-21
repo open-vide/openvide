@@ -11,6 +11,9 @@ import { HostDetailScreen } from "../screens/HostDetailScreen";
 import { TerminalScreen } from "../screens/TerminalScreen";
 import { FileBrowserScreen } from "../screens/FileBrowserScreen";
 import { FileViewerScreen } from "../screens/FileViewerScreen";
+import { PortBrowserScreen } from "../screens/PortBrowserScreen";
+import { WebPreviewScreen } from "../screens/WebPreviewScreen";
+import { FileEditorScreen } from "../screens/FileEditorScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { HamburgerButton } from "../components/HamburgerButton";
 import { useThemeColors } from "../constants/colors";
@@ -89,6 +92,21 @@ export function MainNavigator(): JSX.Element {
         name="FileViewer"
         component={FileViewerScreen}
         options={{ title: "File" }}
+      />
+      <Stack.Screen
+        name="PortBrowser"
+        component={PortBrowserScreen}
+        options={{ title: "Ports" }}
+      />
+      <Stack.Screen
+        name="WebPreview"
+        component={WebPreviewScreen}
+        options={{ title: "Preview" }}
+      />
+      <Stack.Screen
+        name="FileEditor"
+        component={FileEditorScreen}
+        options={{ title: "Editor" }}
       />
     </Stack.Navigator>
   );

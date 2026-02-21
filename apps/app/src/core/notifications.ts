@@ -11,6 +11,13 @@ Notifications.setNotificationHandler({
   }),
 });
 
+/** Register notification categories with action buttons */
+export async function registerNotificationCategories(): Promise<void> {
+  await Notifications.setNotificationCategoryAsync("AI_SESSION", [
+    { identifier: "open", buttonTitle: "Open", options: { opensAppToForeground: true } },
+  ]);
+}
+
 export async function requestPermissions(): Promise<boolean> {
   const { status: existing } = await Notifications.getPermissionsAsync();
   if (existing === "granted") return true;
@@ -28,7 +35,8 @@ export async function notifySessionComplete(
     content: {
       title: `${toolLabel} session completed`,
       body: summary ?? "The AI session has finished.",
-      data: { sessionId },
+      data: { sessionId, type: "session_complete" },
+      categoryIdentifier: "AI_SESSION",
     },
     trigger: null,
   });
@@ -44,7 +52,8 @@ export async function notifySessionFailed(
     content: {
       title: `${toolLabel} session failed`,
       body: error.slice(0, 200),
-      data: { sessionId },
+      data: { sessionId, type: "session_failed" },
+      categoryIdentifier: "AI_SESSION",
     },
     trigger: null,
   });
@@ -59,8 +68,25 @@ export async function notifySessionNeedsInput(
     content: {
       title: `${toolLabel} needs your input`,
       body: "The AI session is waiting for a response.",
-      data: { sessionId },
+      data: { sessionId, type: "session_needs_input" },
+      categoryIdentifier: "AI_SESSION",
     },
     trigger: null,
   });
+}
+
+/** Add notification tap handler - returns cleanup function */
+export function addNotificationTapHandler(
+  onTap: (sessionId: string) => void,
+): () => void {
+  const subscription = Notifications.addNotificationResponseReceivedListener(
+    (response) => {
+      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
+      const sessionId = data?.sessionId;
+      if (typeof sessionId === "string") {
+        onTap(sessionId);
+      }
+    },
+  );
+  return () => subscription.remove();
 }

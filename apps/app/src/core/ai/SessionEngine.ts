@@ -3,6 +3,7 @@ import { newId } from "../id";
 import {
   notifySessionComplete,
   notifySessionFailed,
+  notifySessionNeedsInput,
 } from "../notifications";
 import type {
   AiContentBlock,
@@ -174,6 +175,14 @@ export class SessionEngine {
         const input = event.block.toolInput as Record<string, unknown> | undefined;
         const detail = (input?.["file_path"] as string) ?? (input?.["command"] as string) ?? "";
         event.block.activityText = detail ? `${toolName}: ${detail.slice(0, 80)}` : toolName;
+
+        // Set awaiting_input when the AI asks the user a question
+        if (toolName === "AskUserQuestion") {
+          this.updateStatus(session, "awaiting_input");
+          if (this.notificationsEnabled && this.appState !== "active") {
+            notifySessionNeedsInput(session.id, session.tool).catch(() => {});
+          }
+        }
       } else if (event.block.type === "tool_result" && event.block.toolId) {
         // Find matching tool_use and update its status
         for (let i = msg.content.length - 1; i >= 0; i--) {

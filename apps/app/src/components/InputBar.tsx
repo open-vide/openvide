@@ -70,6 +70,7 @@ export function InputBar({
   isListening = false,
   onVoiceStart,
   onVoiceEnd,
+  onAttachPress,
 }: {
   placeholder?: string;
   isRunning?: boolean;
@@ -81,6 +82,7 @@ export function InputBar({
   isListening?: boolean;
   onVoiceStart?: () => void;
   onVoiceEnd?: () => void;
+  onAttachPress?: () => void;
 }): JSX.Element {
   const { accent, dimmed } = useThemeColors();
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -165,22 +167,34 @@ export function InputBar({
             accessibilityLabel="Message input"
           />
         )}
-        {/* Mic / Send button inside the text field */}
+        {/* Attach + Mic / Send buttons inside the text field */}
         {!isListening && (
-          <Pressable
-            className="h-[54px] items-center justify-center pl-2 pr-3 active:opacity-80"
-            onPress={hasText ? handleSend : handleMicPress}
-            accessibilityRole="button"
-            accessibilityLabel={hasText ? "Send" : "Voice input"}
-          >
-            {hasText ? (
-              <View className="w-9 h-9 rounded-full bg-accent items-center justify-center">
-                <Icon name="send" size={18} color="#FFFFFF" />
-              </View>
-            ) : (
-              <Icon name="mic" size={22} color={dimmed} />
+          <View className="flex-row items-center">
+            {onAttachPress && !hasText && (
+              <Pressable
+                className="h-[54px] items-center justify-center pl-1 active:opacity-80"
+                onPress={onAttachPress}
+                accessibilityRole="button"
+                accessibilityLabel="Attach file"
+              >
+                <Icon name="paperclip" size={20} color={dimmed} />
+              </Pressable>
             )}
-          </Pressable>
+            <Pressable
+              className="h-[54px] items-center justify-center pl-2 pr-3 active:opacity-80"
+              onPress={hasText ? handleSend : handleMicPress}
+              accessibilityRole="button"
+              accessibilityLabel={hasText ? "Send" : "Voice input"}
+            >
+              {hasText ? (
+                <View className="w-9 h-9 rounded-full bg-accent items-center justify-center">
+                  <Icon name="send" size={18} color="#FFFFFF" />
+                </View>
+              ) : (
+                <Icon name="mic" size={22} color={dimmed} />
+              )}
+            </Pressable>
+          </View>
         )}
       </View>
 

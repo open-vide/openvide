@@ -1,16 +1,28 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppStore } from "../state/AppStoreContext";
 import { buildColoredReadableDisplay, type TerminalColoredLine } from "../core/terminalView";
+import { TerminalSpecialKeysBar } from "../components/TerminalSpecialKeysBar";
+import { Icon } from "../components/Icon";
 import { cn } from "../lib/utils";
+import { useThemeColors } from "../constants/colors";
 import type { RunRecord } from "../core/types";
 import type { MainStackParamList } from "../navigation/types";
-import { colors } from "../constants/colors";
 
 type Props = NativeStackScreenProps<MainStackParamList, "Terminal">;
 
-export function TerminalScreen({ route }: Props): JSX.Element {
+function StatusDot({ status }: { status: RunRecord["status"] | null }): JSX.Element {
+  const colorClass =
+    status === "running" ? "bg-success" :
+      status === "connecting" ? "bg-warning" :
+        status === "failed" ? "bg-destructive" :
+          "bg-muted-foreground";
+  return <View className={cn("w-2 h-2 rounded-full", colorClass)} />;
+}
+
+export function TerminalScreen({ route, navigation }: Props): JSX.Element {
   const { targetId } = route.params;
   const {
     getTarget,
@@ -18,9 +30,9 @@ export function TerminalScreen({ route }: Props): JSX.Element {
     sendRunInput,
     cancelRun,
     subscribeRun,
-    getRun,
   } = useAppStore();
 
+  const { accent, mutedForeground, dimmed } = useThemeColors();
   const target = getTarget(targetId);
   const [command, setCommand] = useState("");
   const [timeout, setTimeout_] = useState("300");
@@ -32,9 +44,7 @@ export function TerminalScreen({ route }: Props): JSX.Element {
   const [autoFollow, setAutoFollow] = useState(true);
 
   useEffect(() => {
-    if (!activeRunId) {
-      return;
-    }
+    if (!activeRunId) return;
     const unsub = subscribeRun(activeRunId, (run) => {
       const display = buildColoredReadableDisplay(run, { maxLines: 500 });
       setTerminalLines(display.lines);
@@ -50,11 +60,36 @@ export function TerminalScreen({ route }: Props): JSX.Element {
     }
   }, [terminalText, autoFollow]);
 
+  // Set header actions
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View className="flex-row items-center gap-2">
+          <Pressable
+            className="w-9 h-9 rounded-full bg-muted items-center justify-center active:opacity-80"
+            onPress={() => {
+              setTerminalLines([]);
+              setTerminalText("");
+            }}
+          >
+            <Icon name="trash-2" size={16} color={mutedForeground} />
+          </Pressable>
+          <Pressable
+            className="w-9 h-9 rounded-full bg-muted items-center justify-center active:opacity-80"
+            onPress={() => {
+              if (terminalText) void Clipboard.setStringAsync(terminalText);
+            }}
+          >
+            <Icon name="copy" size={16} color={mutedForeground} />
+          </Pressable>
+        </View>
+      ),
+    });
+  }, [navigation, mutedForeground, terminalText]);
+
   const handleRun = useCallback(async () => {
     const trimmed = command.trim();
-    if (trimmed.length === 0) {
-      return;
-    }
+    if (trimmed.length === 0) return;
     try {
       const run = await startCommandRun({
         targetId,
@@ -73,20 +108,31 @@ export function TerminalScreen({ route }: Props): JSX.Element {
   }, [command, timeout, targetId, startCommandRun]);
 
   const handleSendInput = useCallback(async (input: string) => {
-    if (!activeRunId) {
-      return;
-    }
+    if (!activeRunId) return;
     await sendRunInput(activeRunId, input);
   }, [activeRunId, sendRunInput]);
 
   const handleCancel = useCallback(async () => {
-    if (!activeRunId) {
-      return;
-    }
+    if (!activeRunId) return;
     await cancelRun(activeRunId);
   }, [activeRunId, cancelRun]);
 
+  const handlePaste = useCallback(async () => {
+    if (!activeRunId) return;
+    const text = await Clipboard.getStringAsync();
+    if (text) await sendRunInput(activeRunId, text);
+  }, [activeRunId, sendRunInput]);
+
   const isRunning = runStatus === "connecting" || runStatus === "running";
+
+  const statusLabel =
+    runStatus === "running" ? "Running" :
+      runStatus === "connecting" ? "Connecting" :
+        runStatus === "completed" ? "Completed" :
+          runStatus === "failed" ? "Failed" :
+            runStatus === "cancelled" ? "Cancelled" :
+              runStatus === "timeout" ? "Timeout" :
+                "Ready";
 
   if (!target) {
     return (
@@ -98,6 +144,7 @@ export function TerminalScreen({ route }: Props): JSX.Element {
 
   return (
     <View className="flex-1 bg-background">
+      {/* Terminal output */}
       <ScrollView
         ref={scrollRef}
         className="flex-1 bg-[#1E1E1E]"
@@ -127,55 +174,86 @@ export function TerminalScreen({ route }: Props): JSX.Element {
         )}
       </ScrollView>
 
-      <View className="border-t border-border bg-card p-3 gap-2">
+      {/* Special keys bar */}
+      {isRunning && (
+        <TerminalSpecialKeysBar onKey={handleSendInput} />
+      )}
+
+      {/* Action row */}
+      <View className="flex-row gap-2 px-3 py-2 bg-card border-t border-border">
+        <Pressable
+          className="flex-1 flex-row items-center justify-center gap-1.5 bg-muted rounded-lg py-2.5 active:opacity-80"
+          onPress={() => {
+            if (terminalText) void Clipboard.setStringAsync(terminalText);
+          }}
+          disabled={!terminalText}
+        >
+          <Icon name="copy" size={14} color={mutedForeground} />
+          <Text className="text-muted-foreground text-xs font-semibold">Copy</Text>
+        </Pressable>
+        <Pressable
+          className="flex-1 flex-row items-center justify-center gap-1.5 bg-muted rounded-lg py-2.5 active:opacity-80"
+          onPress={handlePaste}
+          disabled={!isRunning}
+        >
+          <Icon name="clipboard" size={14} color={mutedForeground} />
+          <Text className="text-muted-foreground text-xs font-semibold">Paste</Text>
+        </Pressable>
+        <Pressable
+          className="flex-1 flex-row items-center justify-center gap-1.5 bg-muted rounded-lg py-2.5 active:opacity-80"
+          onPress={() => {
+            setTerminalLines([]);
+            setTerminalText("");
+          }}
+        >
+          <Icon name="trash-2" size={14} color={mutedForeground} />
+          <Text className="text-muted-foreground text-xs font-semibold">Clear</Text>
+        </Pressable>
+      </View>
+
+      {/* Command input */}
+      <View className="px-3 pb-2 bg-card">
         <View className="flex-row gap-2">
           <TextInput
-            className="flex-1 bg-muted rounded-lg px-3.5 py-3 text-foreground font-mono text-sm"
+            className="flex-1 bg-muted rounded-2xl p-3.5 text-foreground font-mono text-[16px]"
             value={command}
             onChangeText={setCommand}
             placeholder="$ command..."
-            placeholderTextColor={colors.dimmed}
+            placeholderTextColor={dimmed}
             autoCapitalize="none"
             autoCorrect={false}
             returnKeyType="send"
             onSubmitEditing={isRunning ? () => handleSendInput(command + "\n") : handleRun}
           />
           {isRunning ? (
-            <Pressable className="bg-destructive rounded-lg px-4 justify-center" onPress={handleCancel}>
+            <Pressable
+              className="bg-destructive rounded-2xl px-5 justify-center active:opacity-80"
+              onPress={handleCancel}
+            >
               <Text className="text-white font-bold text-sm">Cancel</Text>
             </Pressable>
           ) : (
-            <Pressable className="bg-accent rounded-lg px-4 justify-center" onPress={handleRun}>
+            <Pressable
+              className="bg-accent rounded-2xl px-5 justify-center active:opacity-80"
+              onPress={handleRun}
+            >
               <Text className="text-white font-bold text-sm">Run</Text>
             </Pressable>
           )}
         </View>
+      </View>
 
-        {isRunning && (
-          <View className="flex-row gap-2">
-            <Pressable className="bg-muted px-3 py-1.5 rounded-md" onPress={() => handleSendInput("\n")}>
-              <Text className="text-muted-foreground font-mono text-xs">Enter</Text>
-            </Pressable>
-            <Pressable className="bg-muted px-3 py-1.5 rounded-md" onPress={() => handleSendInput("\u0003")}>
-              <Text className="text-muted-foreground font-mono text-xs">Ctrl+C</Text>
-            </Pressable>
-            <Pressable className="bg-muted px-3 py-1.5 rounded-md" onPress={() => handleSendInput("\u001B")}>
-              <Text className="text-muted-foreground font-mono text-xs">Esc</Text>
-            </Pressable>
-            <Pressable className="bg-muted px-3 py-1.5 rounded-md" onPress={() => handleSendInput("\t")}>
-              <Text className="text-muted-foreground font-mono text-xs">Tab</Text>
-            </Pressable>
-          </View>
-        )}
-
-        <View className="flex-row justify-between">
-          {runStatus && <Text className="text-dimmed text-xs">Status: {runStatus}</Text>}
-          <Pressable onPress={() => setAutoFollow((v) => !v)}>
-            <Text className={cn("text-xs", autoFollow ? "text-accent" : "text-dimmed")}>
-              Auto-follow: {autoFollow ? "ON" : "OFF"}
-            </Text>
-          </Pressable>
+      {/* Status bar */}
+      <View className="flex-row items-center justify-between px-4 py-2 bg-card border-t border-border">
+        <View className="flex-row items-center gap-2">
+          <StatusDot status={runStatus} />
+          <Text className="text-dimmed text-xs">{statusLabel}</Text>
         </View>
+        <Pressable onPress={() => setAutoFollow((v) => !v)} className="active:opacity-80">
+          <Text className={cn("text-xs font-semibold", autoFollow ? "text-accent" : "text-dimmed")}>
+            Auto-follow: {autoFollow ? "ON" : "OFF"}
+          </Text>
+        </Pressable>
       </View>
     </View>
   );

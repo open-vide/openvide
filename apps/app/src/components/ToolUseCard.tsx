@@ -8,6 +8,7 @@ import { CodeBlock } from "./CodeBlock";
 import { CollapsibleCard } from "./CollapsibleCard";
 import { MonoBlock } from "./MonoBlock";
 import { StreamingDots } from "./StreamingDots";
+import { getDiffStats } from "./DiffView";
 
 const FONT_FAMILY = Platform.select({ ios: "Menlo", android: "monospace" });
 
@@ -78,11 +79,16 @@ export function ToolUseCard({
       return lines.join("\n");
     };
 
+    const diffText = buildEditDiff();
+    const stats = (oldStr.length > 0 || newStr.length > 0) ? getDiffStats(diffText) : null;
+    const totalPreviewLines = oldStr.split("\n").length + newStr.split("\n").length;
+    const showPreviewLimit = totalPreviewLines > 10;
+
     return (
       <Pressable
         onPress={() => {
           if (oldStr.length > 0 || newStr.length > 0) {
-            navigation.navigate("DiffViewer", { diff: buildEditDiff(), filePath, language: lang || undefined });
+            navigation.navigate("DiffViewer", { diff: diffText, filePath, language: lang || undefined });
           }
         }}
       >
@@ -91,12 +97,25 @@ export function ToolUseCard({
           defaultOpen={isRunning || (oldStr.length > 0 || newStr.length > 0)}
           titleRight={statusIndicator}
         >
+          {stats && (
+            <Text className="text-muted-foreground text-[11px] mb-1">
+              {stats.removed > 0 ? `${stats.removed} removed` : ""}{stats.removed > 0 && stats.added > 0 ? ", " : ""}{stats.added > 0 ? `${stats.added} added` : ""}
+            </Text>
+          )}
           {oldStr.length > 0 || newStr.length > 0 ? (
             <View className="bg-[#1E1E1E] rounded-lg overflow-hidden">
               {lang ? (
                 <Text className="text-muted-foreground text-[11px] uppercase px-3 pt-2">{lang}</Text>
               ) : null}
-              <InlineDiff oldStr={oldStr} newStr={newStr} />
+              <InlineDiff
+                oldStr={showPreviewLimit ? oldStr.split("\n").slice(0, 5).join("\n") : oldStr}
+                newStr={showPreviewLimit ? newStr.split("\n").slice(0, 5).join("\n") : newStr}
+              />
+              {showPreviewLimit && (
+                <View className="px-3 py-2 items-center border-t border-muted">
+                  <Text className="text-accent text-xs font-semibold">View Full Diff</Text>
+                </View>
+              )}
             </View>
           ) : (
             <MonoBlock text={JSON.stringify(input, null, 2)} />
@@ -113,6 +132,7 @@ export function ToolUseCard({
     const filePath = (input?.["file_path"] as string) ?? (input?.["filePath"] as string) ?? "";
     const content = (input?.["content"] as string) ?? "";
     const lang = filePath ? inferLanguageFromPath(filePath) : "";
+    const contentLines = content.length > 0 ? content.split("\n").length : 0;
 
     const buildWriteDiff = (): string => {
       const lines: string[] = [`--- /dev/null`, `+++ b/${filePath}`, "@@ new file @@"];
@@ -133,8 +153,20 @@ export function ToolUseCard({
           defaultOpen={isRunning || content.length > 0}
           titleRight={statusIndicator}
         >
+          {contentLines > 0 && (
+            <Text className="text-muted-foreground text-[11px] mb-1">
+              {contentLines} lines added
+            </Text>
+          )}
           {content.length > 0 ? (
-            <CodeBlock code={content} language={lang || undefined} showCopyButton maxLines={50} />
+            <>
+              <CodeBlock code={content} language={lang || undefined} showCopyButton maxLines={10} />
+              {contentLines > 10 && (
+                <View className="items-center py-1.5">
+                  <Text className="text-accent text-xs font-semibold">View Full Diff</Text>
+                </View>
+              )}
+            </>
           ) : (
             <MonoBlock text={JSON.stringify(input, null, 2)} />
           )}

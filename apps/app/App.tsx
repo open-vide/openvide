@@ -6,8 +6,8 @@ import { NavigationContainer, type NavigationContainerRef } from "@react-navigat
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import * as Notifications from "expo-notifications";
 import type { RootStackParamList } from "./src/navigation/types";
+import { registerNotificationCategories, addNotificationTapHandler } from "./src/core/notifications";
 import { DrawerLayout } from "./src/navigation/DrawerLayout";
 import { NewSessionSheet } from "./src/screens/NewSessionSheet";
 import { CreateWorkspaceSheet } from "./src/screens/CreateWorkspaceSheet";
@@ -47,17 +47,16 @@ function RootNavigator(): JSX.Element {
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
 
   useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data = response.notification.request.content.data as Record<string, unknown> | undefined;
-      const sessionId = data?.["sessionId"] as string | undefined;
-      if (sessionId && navigationRef.current) {
+    registerNotificationCategories().catch(() => {});
+    const cleanup = addNotificationTapHandler((sessionId) => {
+      if (navigationRef.current) {
         navigationRef.current.navigate("Main", {
           screen: "AiChat",
           params: { sessionId },
         });
       }
     });
-    return () => subscription.remove();
+    return cleanup;
   }, []);
 
   return (

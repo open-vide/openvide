@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Editor</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #1E1E1E;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #editor-container {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Touch optimizations: larger scrollbar targets and scroll momentum */
+    .monaco-editor .scrollbar.vertical .slider {
+      min-height: 40px !important;
+      width: 10px !important;
+    }
+
+    .monaco-editor .scrollbar.horizontal .slider {
+      min-width: 40px !important;
+      height: 10px !important;
+    }
+
+    .monaco-editor .scrollbar.vertical {
+      width: 14px !important;
+    }
+
+    .monaco-editor .scrollbar.horizontal {
+      height: 14px !important;
+    }
+
+    /* Ensure touch scrolling has momentum */
+    .monaco-editor .overflow-guard {
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Larger touch targets for line numbers gutter */
+    .monaco-editor .margin {
+      touch-action: pan-y;
+    }
+  </style>
+</head>
+<body>
+  <div id="editor-container"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  <script>
+    (function () {
+      'use strict';
+
+      var editor = null;
+      var isDirty = false;
+      var originalContent = '';
+
+      // Language detection from file extension
+      var extensionToLanguage = {
+        '.js': 'javascript',
+        '.jsx': 'javascript',
+        '.ts': 'typescript',
+        '.tsx': 'typescript',
+        '.py': 'python',
+        '.go': 'go',
+        '.rs': 'rust',
+        '.java': 'java',
+        '.c': 'c',
+        '.h': 'c',
+        '.cpp': 'cpp',
+        '.hpp': 'cpp',
+        '.html': 'html',
+        '.css': 'css',
+        '.json': 'json',
+        '.yaml': 'yaml',
+        '.yml': 'yaml',
+        '.md': 'markdown',
+        '.sh': 'shell',
+        '.bash': 'shell',
+        '.sql': 'sql',
+        '.rb': 'ruby'
+      };
+
+      function detectLanguage(filename) {
+        if (!filename) return 'plaintext';
+        var dotIndex = filename.lastIndexOf('.');
+        if (dotIndex === -1) return 'plaintext';
+        var ext = filename.substring(dotIndex).toLowerCase();
+        return extensionToLanguage[ext] || 'plaintext';
+      }
+
+      // Send message to React Native
+      function postToRN(message) {
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify(message));
+        }
+      }
+
+      // Update dirty state
+      function updateDirtyState(content) {
+        var wasDirty = isDirty;
+        isDirty = content !== originalContent;
+        return isDirty !== wasDirty;
+      }
+
+      // Configure Monaco loader
+      require.config({
+        paths: {
+          vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs'
+        }
+      });
+
+      // Load Monaco Editor
+      require(['vs/editor/editor.main'], function () {
+
+        // Create the editor with default settings
+        editor = monaco.editor.create(document.getElementById('editor-container'), {
+          value: '',
+          language: 'plaintext',
+          theme: 'vs-dark',
+
+          // Font
+          fontSize: 14,
+          fontFamily: "'Menlo', 'Consolas', 'Courier New', monospace",
+
+          // Enabled features
+          matchBrackets: 'always',
+          autoIndent: 'full',
+          autoClosingBrackets: 'always',
+          autoClosingQuotes: 'always',
+          wordWrap: 'on',
+          bracketPairColorization: { enabled: true },
+
+          // Disabled features
+          minimap: { enabled: false },
+          codeLens: false,
+
+          // Touch optimizations
+          scrollbar: {
+            vertical: 'auto',
+            horizontal: 'auto',
+            verticalScrollbarSize: 14,
+            horizontalScrollbarSize: 14,
+            useShadows: false
+          },
+          smoothScrolling: true,
+          mouseWheelScrollSensitivity: 1,
+          fastScrollSensitivity: 5,
+          scrollBeyondLastLine: true,
+
+          // General editor settings
+          renderLineHighlight: 'line',
+          cursorBlinking: 'smooth',
+          cursorSmoothCaretAnimation: 'on',
+          tabSize: 2,
+          insertSpaces: true,
+          automaticLayout: true,
+          padding: { top: 8 }
+        });
+
+        // Listen for content changes
+        editor.onDidChangeModelContent(function () {
+          var content = editor.getValue();
+          updateDirtyState(content);
+          postToRN({
+            type: 'change',
+            content: content,
+            dirty: isDirty
+          });
+        });
+
+        // Listen for selection changes
+        editor.onDidChangeCursorSelection(function (e) {
+          var selection = e.selection;
+          var model = editor.getModel();
+          var selectedText = '';
+          if (model && !selection.isEmpty()) {
+            selectedText = model.getValueInRange(selection);
+          }
+          postToRN({
+            type: 'selection',
+            startLine: selection.startLineNumber,
+            endLine: selection.endLineNumber,
+            startCol: selection.startColumn,
+            endCol: selection.endColumn,
+            selectedText: selectedText
+          });
+        });
+
+        // Register Ctrl+S / Cmd+S as save command
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function () {
+          postToRN({ type: 'save' });
+        });
+
+        // Handle messages from React Native
+        function handleMessage(event) {
+          var data;
+          try {
+            data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+          } catch (e) {
+            return;
+          }
+
+          if (!data || !data.type) return;
+
+          switch (data.type) {
+            case 'init':
+              handleInit(data);
+              break;
+            case 'setContent':
+              handleSetContent(data);
+              break;
+            case 'find':
+              handleFind(data);
+              break;
+            case 'undo':
+              editor.trigger('external', 'undo', null);
+              break;
+            case 'redo':
+              editor.trigger('external', 'redo', null);
+              break;
+            case 'format':
+              editor.trigger('external', 'editor.action.formatDocument', null);
+              break;
+          }
+        }
+
+        function handleInit(data) {
+          var content = data.content || '';
+          var language = data.language || 'plaintext';
+          var theme = data.theme || 'vs-dark';
+
+          // Apply theme
+          monaco.editor.setTheme(theme);
+
+          // Set language on existing model or create new one
+          var model = editor.getModel();
+          if (model) {
+            monaco.editor.setModelLanguage(model, language);
+            model.setValue(content);
+          }
+
+          // Apply any additional options
+          if (data.options && typeof data.options === 'object') {
+            editor.updateOptions(data.options);
+          }
+
+          // Reset dirty state
+          originalContent = content;
+          isDirty = false;
+        }
+
+        function handleSetContent(data) {
+          var content = data.content || '';
+          var model = editor.getModel();
+          if (model) {
+            // Use pushEditOperations to preserve undo stack where possible
+            model.setValue(content);
+          }
+
+          // Reset dirty state
+          originalContent = content;
+          isDirty = false;
+        }
+
+        function handleFind(data) {
+          var query = data.query || '';
+          // Open the find widget
+          editor.trigger('external', 'actions.find', null);
+          // Set the search string
+          var findController = editor.getContribution('editor.contrib.findController');
+          if (findController) {
+            findController.setSearchString(query);
+          }
+        }
+
+        // Listen for messages from React Native
+        window.addEventListener('message', handleMessage);
+        document.addEventListener('message', handleMessage);
+
+        // Handle viewport resize
+        window.addEventListener('resize', function () {
+          if (editor) {
+            editor.layout();
+          }
+        });
+
+        // Notify React Native that the editor is ready
+        postToRN({ type: 'ready' });
+      });
+
+      // Expose detectLanguage globally so RN can use it if needed
+      window.detectLanguage = detectLanguage;
+    })();
+  </script>
+</body>
+</html>

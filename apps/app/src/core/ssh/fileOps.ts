@@ -250,3 +250,75 @@ export async function readFile(
 
   return { content, truncated };
 }
+
+export async function writeFile(
+  ssh: NativeSshClient,
+  target: TargetProfile,
+  creds: SshCredentials,
+  path: string,
+  content: string,
+  options?: { signal?: AbortSignal; backup?: boolean },
+): Promise<void> {
+  const safePath = path.replace(/'/g, "'\\''");
+
+  // Create .bak backup if requested
+  if (options?.backup) {
+    const backupCmd = `cp '${safePath}' '${safePath}.bak' 2>/dev/null || true`;
+    await runScriptedCommand(ssh, target, creds, backupCmd, {
+      timeoutMs: 5000,
+      timeoutMessage: "Creating backup timed out",
+      signal: options?.signal,
+    });
+  }
+
+  // Use heredoc to write file content safely
+  // The delimiter is chosen to be unlikely in file content
+  const delimiter = "OPENVIDE_WRITE_EOF_" + Date.now();
+  const command = `cat > '${safePath}' << '${delimiter}'\n${content}\n${delimiter}`;
+
+  await runScriptedCommand(ssh, target, creds, command, {
+    timeoutMs: 15000,
+    timeoutMessage: "Writing file timed out",
+    signal: options?.signal,
+    busyRetryCount: 1,
+  });
+}
+
+export async function searchFiles(
+  ssh: NativeSshClient,
+  target: TargetProfile,
+  creds: SshCredentials,
+  basePath: string,
+  query: string,
+  options?: { signal?: AbortSignal },
+): Promise<RemoteFileEntry[]> {
+  const safePath = basePath.replace(/'/g, "'\\''");
+  const safeQuery = query.replace(/'/g, "'\\''");
+  // Use printf to output type indicator (d for directory, f for file) followed by path
+  // Fall back to plain find output on systems without -printf (e.g. BSD/macOS)
+  const command = `find '${safePath}' -maxdepth 3 -iname '*${safeQuery}*' -not -path '*/\\.git/*' -printf '%y %p\\n' 2>/dev/null | head -50 || find '${safePath}' -maxdepth 3 -iname '*${safeQuery}*' -not -path '*/\\.git/*' 2>/dev/null | head -50`;
+
+  const output = await runScriptedCommand(ssh, target, creds, command, {
+    timeoutMs: 15000,
+    timeoutMessage: "File search timed out",
+    signal: options?.signal,
+    busyRetryCount: 1,
+  });
+
+  const entries: RemoteFileEntry[] = [];
+  for (const rawLine of output.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    // Try to parse "type path" format from -printf
+    let isDirectory = false;
+    let filePath = line;
+    if (/^[dflbcps] /.test(line)) {
+      isDirectory = line[0] === "d";
+      filePath = line.slice(2);
+    }
+    const name = filePath.split("/").pop() ?? filePath;
+    if (!name) continue;
+    entries.push({ name, path: filePath, isDirectory, size: 0, modified: "", permissions: "" });
+  }
+  return entries;
+}

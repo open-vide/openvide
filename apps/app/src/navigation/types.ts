@@ -8,12 +8,15 @@ export type MainStackParamList = {
   Settings: undefined;
   // Pushed screens
   WorkspaceDetail: { workspaceId: string };
-  AiChat: { sessionId: string };
+  AiChat: { sessionId: string; initialPrompt?: string; workspaceId?: string };
   DiffViewer: { diff: string; filePath?: string; language?: string };
   HostDetail: { targetId: string; autoDetect?: boolean };
   Terminal: { targetId: string };
   FileBrowser: { targetId: string; initialPath?: string };
   FileViewer: { targetId: string; filePath: string };
+  PortBrowser: { targetId: string };
+  WebPreview: { targetId: string; url: string; title?: string };
+  FileEditor: { targetId: string; filePath: string };
 };
 
 export type ModalStackParamList = {

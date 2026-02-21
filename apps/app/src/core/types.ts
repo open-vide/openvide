@@ -203,6 +203,7 @@ export interface AiSession {
   conversationId?: string;
   workingDirectory?: string;
   model?: string;
+  autoAccept?: boolean;
   totalInputTokens?: number;
   totalOutputTokens?: number;
   contextStatus?: "ok" | "unavailable";
@@ -265,6 +266,7 @@ export interface PersistedState {
   sessions: AiSession[];
   promptTemplates: PromptTemplate[];
   promptFlows: PromptFlow[];
+  hiddenBuiltInPromptIds: string[];
   autoAcceptTools: boolean;
   notificationsEnabled: boolean;
   speechLanguage: string;
