@@ -17,6 +17,7 @@ export type MainStackParamList = {
   PortBrowser: { targetId: string };
   WebPreview: { targetId: string; url: string; title?: string };
   FileEditor: { targetId: string; filePath: string };
+  SessionDiffs: { targetId: string; workingDirectory: string };
 };
 
 export type ModalStackParamList = {

@@ -208,6 +208,12 @@ export const AiContentBlockView = React.memo(function AiContentBlockView({
 
     case "tool_result": {
       const resultText = block.result ?? "";
+      const trimmedResult = resultText.trim();
+      // Skip rendering if the result is just a tool-name echo (e.g. "Read: /path", "Edit: /path")
+      // since the ToolUseCard above already displays this info
+      if (/^(Read|Edit|Write|Bash|Grep|Glob|MultiEdit):\s/.test(trimmedResult) && !trimmedResult.includes("\n")) {
+        return <View />;
+      }
       const looksLikeDiff = resultText.includes("@@") && (resultText.includes("---") || resultText.includes("+++"));
       return (
         <View
@@ -232,25 +238,32 @@ export const AiContentBlockView = React.memo(function AiContentBlockView({
     }
 
     case "file_change": {
+      const diffContent = block.diff ?? "";
+      const hasContent = block.filePath || diffContent.length > 0;
+      if (!hasContent) {
+        return <View />;
+      }
       const lang = block.filePath ? inferLanguageFromPath(block.filePath) : "";
       return (
         <Pressable
           className="bg-muted rounded-2xl p-3 gap-2"
           onPress={() => {
-            if (block.diff != null) {
+            if (diffContent.length > 0) {
               navigation.navigate("DiffViewer", {
-                diff: block.diff,
+                diff: diffContent,
                 filePath: block.filePath,
                 language: lang || undefined,
               });
             }
           }}
         >
-          <Text selectable className="text-foreground font-mono text-[13px] font-semibold">
-            {block.filePath}
-          </Text>
-          {block.diff != null && (
-            <DiffView diff={block.diff} filePath={block.filePath} language={lang || undefined} />
+          {block.filePath ? (
+            <Text selectable className="text-foreground font-mono text-[13px] font-semibold">
+              {block.filePath}
+            </Text>
+          ) : null}
+          {diffContent.length > 0 && (
+            <DiffView diff={diffContent} language={lang || undefined} />
           )}
         </Pressable>
       );

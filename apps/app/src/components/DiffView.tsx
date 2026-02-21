@@ -170,15 +170,15 @@ export const DiffView = React.memo(function DiffView({
   const [showAll, setShowAll] = useState(false);
   const parsed = parseDiff(diff);
 
-  if (parsed.length === 0) {
-    return <MonoBlock text={diff} />;
-  }
-
   const allLines: DiffLine[] = [];
   for (const file of parsed) {
     for (const hunk of file.hunks) {
       allLines.push(...hunk.lines);
     }
+  }
+
+  if (allLines.length === 0) {
+    return <MonoBlock text={diff} />;
   }
 
   const displayLines = !showAll && allLines.length > MAX_LINES

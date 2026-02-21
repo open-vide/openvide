@@ -24,7 +24,7 @@ export const HostCard = React.memo(function HostCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={target.label}
-      className="active:opacity-70"
+      className=""
     >
       <GlassContainer variant="card" className="p-3.5">
         <View className="flex-row items-center">

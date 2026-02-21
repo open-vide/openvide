@@ -20,6 +20,28 @@ export interface ParsedDiff {
   hunks: DiffHunk[];
 }
 
+/**
+ * Splits raw `git diff` output into per-file chunks.
+ * Each chunk includes the full diff text for that file (diff --git header through last hunk).
+ */
+export function splitMultiFileDiff(raw: string): Array<{ filePath: string; diff: string }> {
+  const results: Array<{ filePath: string; diff: string }> = [];
+  const parts = raw.split(/^(?=diff --git )/m);
+
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed || !trimmed.startsWith("diff --git ")) continue;
+
+    // Extract file path from "+++ b/..." line
+    const plusMatch = /^\+\+\+ b\/(.+)$/m.exec(trimmed);
+    if (!plusMatch?.[1]) continue;
+
+    results.push({ filePath: plusMatch[1], diff: trimmed });
+  }
+
+  return results;
+}
+
 export function parseDiff(text: string): ParsedDiff[] {
   try {
     const results: ParsedDiff[] = [];

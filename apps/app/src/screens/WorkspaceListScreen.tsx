@@ -72,7 +72,6 @@ export function WorkspaceListScreen({ navigation }: Props): JSX.Element {
             actionLabel="Delete"
           >
             <Pressable
-              className="active:opacity-80"
               onPress={() => navigation.navigate("WorkspaceDetail", { workspaceId: item.id })}
             >
               <GlassContainer variant="card" className="p-3.5 gap-2.5">

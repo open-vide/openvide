@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, FlatList, KeyboardAvoidingView, Platform, Text, View } from "react-native";
+import { ActionSheetIOS, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppStore } from "../state/AppStoreContext";
@@ -8,6 +8,8 @@ import { InputBar } from "../components/InputBar";
 import { QuickActions } from "../components/QuickActions";
 import { MessageMenu } from "../components/MessageMenu";
 import { ProviderIcon } from "../components/ProviderIcon";
+import { Icon } from "../components/Icon";
+import { GlassContainer } from "../components/GlassContainer";
 import { useVoiceInput } from "../core/useVoiceInput";
 import type { AiMessage, AiSession } from "../core/types";
 import type { MainStackParamList } from "../navigation/types";
@@ -42,6 +44,7 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
   const insets = useSafeAreaInsets();
   const [session, setSession] = useState<AiSession | undefined>(() => getAiSession(sessionId));
   const [menuMessage, setMenuMessage] = useState<AiMessage | null>(null);
+  const [sessionMenuVisible, setSessionMenuVisible] = useState(false);
   const [inputText, setInputText] = useState(initialPrompt ?? "");
   const textBeforeVoiceRef = useRef("");
 
@@ -75,6 +78,33 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
     }
   }, [sessionId, getAiSession]);
 
+  const handleSessionMenu = useCallback(() => {
+    if (!session) return;
+    const targetId = session.targetId;
+    const workDir = session.workingDirectory;
+
+    if (Platform.OS === "ios") {
+      const options = [
+        ...(workDir ? ["Show Diffs"] : []),
+        ...(workDir ? ["Browse Files"] : []),
+        "Cancel",
+      ];
+      const cancelButtonIndex = options.length - 1;
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options, cancelButtonIndex },
+        (idx) => {
+          if (workDir && options[idx] === "Show Diffs") {
+            navigation.navigate("SessionDiffs", { targetId, workingDirectory: workDir });
+          } else if (workDir && options[idx] === "Browse Files") {
+            navigation.navigate("FileBrowser", { targetId, initialPath: workDir });
+          }
+        },
+      );
+    } else {
+      setSessionMenuVisible(true);
+    }
+  }, [session, navigation]);
+
   useEffect(() => {
     if (session) {
       const target = targets.find((t) => t.id === session.targetId);
@@ -96,9 +126,17 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
             ) : null}
           </View>
         ),
+        headerRight: () => (
+          <Pressable
+            onPress={handleSessionMenu}
+            className="w-10 h-10 items-center justify-center active:opacity-80 mr-[-4px]"
+          >
+            <Icon name="more-vertical" size={20} />
+          </Pressable>
+        ),
       });
     }
-  }, [session, targets, navigation]);
+  }, [session, targets, navigation, handleSessionMenu]);
 
   const isRunning = session?.status === "running";
 
@@ -219,6 +257,56 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
         visible={menuMessage != null}
         onClose={handleMenuClose}
       />
+
+      {/* Android session menu modal */}
+      {Platform.OS !== "ios" && (
+        <Modal transparent visible={sessionMenuVisible} animationType="fade" onRequestClose={() => setSessionMenuVisible(false)}>
+          <Pressable className="flex-1 bg-black/50 justify-end" onPress={() => setSessionMenuVisible(false)}>
+            <GlassContainer variant="sheet" className="pb-[34px] pt-2">
+              {session?.workingDirectory && (
+                <>
+                  <Pressable
+                    className="py-4 px-5"
+                    onPress={() => {
+                      setSessionMenuVisible(false);
+                      navigation.navigate("SessionDiffs", {
+                        targetId: session.targetId,
+                        workingDirectory: session.workingDirectory!,
+                      });
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Show Diffs"
+                  >
+                    <Text className="text-foreground text-[17px]">Show Diffs</Text>
+                  </Pressable>
+                  <Pressable
+                    className="py-4 px-5"
+                    onPress={() => {
+                      setSessionMenuVisible(false);
+                      navigation.navigate("FileBrowser", {
+                        targetId: session.targetId,
+                        initialPath: session.workingDirectory!,
+                      });
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Browse Files"
+                  >
+                    <Text className="text-foreground text-[17px]">Browse Files</Text>
+                  </Pressable>
+                </>
+              )}
+              <Pressable
+                className="py-4 px-5 border-t border-border mt-2"
+                onPress={() => setSessionMenuVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text className="text-error text-[17px] font-semibold">Cancel</Text>
+              </Pressable>
+            </GlassContainer>
+          </Pressable>
+        </Modal>
+      )}
     </KeyboardAvoidingView>
   );
 }

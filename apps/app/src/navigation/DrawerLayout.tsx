@@ -1,5 +1,5 @@
 import React, { useCallback } from "react";
-import { Dimensions, Pressable, StyleSheet } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   interpolate,
@@ -18,11 +18,10 @@ const MAIN_SCALE = 0.985;
 const OVERLAY_OPACITY = 0.45;
 const EDGE_WIDTH = 24;
 const SPRING_CONFIG = { damping: 24, stiffness: 200, mass: 0.7 };
-const SCREEN_WIDTH = Dimensions.get("window").width;
 
 
 function DrawerInner(): JSX.Element {
-  const { drawerProgress, isOpen, openSidebar, closeSidebar } = useSidebar();
+  const { drawerProgress, isOpen, isAtRoot, openSidebar, closeSidebar } = useSidebar();
   const { background } = useThemeColors();
 
   const closeDrawer = useCallback(() => {
@@ -33,32 +32,41 @@ function DrawerInner(): JSX.Element {
     openSidebar();
   }, [openSidebar]);
 
-  // Edge pan gesture to open/close
-  const pan = Gesture.Pan()
-    .activeOffsetX([-10, 10])
+  // Edge pan — only lives on a thin invisible strip at the left edge.
+  // Does NOT wrap the whole app, so SwipeableRow / back gestures work freely.
+  const edgePan = Gesture.Pan()
+    .enabled(isAtRoot && !isOpen)
+    .activeOffsetX(10)
     .failOffsetY([-20, 20])
     .onUpdate((event) => {
       "worklet";
-      const progress = Math.max(0, Math.min(1, event.translationX / MAIN_SHIFT));
-      if (!isOpen) {
-        // Only respond if starting from left edge
-        if (event.x - event.translationX < EDGE_WIDTH) {
-          drawerProgress.value = progress;
-        }
-      } else {
-        drawerProgress.value = Math.max(0, Math.min(1, 1 + event.translationX / MAIN_SHIFT));
-      }
+      drawerProgress.value = Math.max(0, Math.min(1, event.translationX / MAIN_SHIFT));
     })
     .onEnd((event) => {
       "worklet";
-      const shouldOpen = isOpen
-        ? event.translationX > -MAIN_SHIFT / 3
-        : event.translationX > MAIN_SHIFT / 3 || event.velocityX > 500;
-
+      const shouldOpen = event.translationX > MAIN_SHIFT / 3 || event.velocityX > 500;
       drawerProgress.value = withSpring(shouldOpen ? 1 : 0, SPRING_CONFIG);
       if (shouldOpen) {
         runOnJS(openDrawer)();
       } else {
+        runOnJS(closeDrawer)();
+      }
+    });
+
+  // Overlay pan — swipe left on the overlay to close the drawer.
+  const overlayPan = Gesture.Pan()
+    .enabled(isOpen)
+    .activeOffsetX(-10)
+    .failOffsetY([-20, 20])
+    .onUpdate((event) => {
+      "worklet";
+      drawerProgress.value = Math.max(0, Math.min(1, 1 + event.translationX / MAIN_SHIFT));
+    })
+    .onEnd((event) => {
+      "worklet";
+      const shouldClose = event.translationX < -MAIN_SHIFT / 3 || event.velocityX < -500;
+      drawerProgress.value = withSpring(shouldClose ? 0 : 1, SPRING_CONFIG);
+      if (shouldClose) {
         runOnJS(closeDrawer)();
       }
     });
@@ -87,24 +95,35 @@ function DrawerInner(): JSX.Element {
     pointerEvents: drawerProgress.value > 0.01 ? ("auto" as const) : ("none" as const),
   }));
 
-  return (
-    <GestureDetector gesture={pan}>
-      <Animated.View style={[styles.container, { backgroundColor: background }]}>
-        {/* Sidebar — rendered FIRST so it's behind the main content */}
-        <Animated.View style={[styles.sidebar, sidebarStyle]}>
-          <SidebarContent />
-        </Animated.View>
+  // Edge hit area visibility — only render when drawer is closed and on root screen
+  const edgePointerEvents = useAnimatedStyle(() => ({
+    pointerEvents: drawerProgress.value < 0.01 ? ("auto" as const) : ("none" as const),
+  }));
 
-        {/* Main content — rendered SECOND so it's on top, slides right to reveal sidebar */}
-        <Animated.View style={[styles.main, { backgroundColor: background }, mainStyle]}>
-          <MainNavigator />
-          {/* Overlay inside main — covers full area */}
+  return (
+    <Animated.View style={[styles.container, { backgroundColor: background }]}>
+      {/* Sidebar — rendered FIRST so it's behind the main content */}
+      <Animated.View style={[styles.sidebar, sidebarStyle]}>
+        <SidebarContent />
+      </Animated.View>
+
+      {/* Main content — rendered SECOND so it's on top, slides right to reveal sidebar */}
+      <Animated.View style={[styles.main, { backgroundColor: background }, mainStyle]}>
+        <MainNavigator />
+
+        {/* Dark overlay for closing — only interactive when drawer is open */}
+        <GestureDetector gesture={overlayPan}>
           <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "#000000" }, overlayOpacity]}>
             <Pressable style={StyleSheet.absoluteFill} onPress={closeSidebar} />
           </Animated.View>
-        </Animated.View>
+        </GestureDetector>
+
+        {/* Invisible edge strip for opening — doesn't block any child gestures */}
+        <GestureDetector gesture={edgePan}>
+          <Animated.View style={[styles.edgeStrip, edgePointerEvents]} />
+        </GestureDetector>
       </Animated.View>
-    </GestureDetector>
+    </Animated.View>
   );
 }
 
@@ -132,5 +151,12 @@ const styles = StyleSheet.create({
   main: {
     flex: 1,
     overflow: "hidden",
+  },
+  edgeStrip: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: EDGE_WIDTH,
   },
 });

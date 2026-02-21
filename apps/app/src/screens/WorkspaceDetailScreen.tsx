@@ -6,6 +6,7 @@ import type { MainStackParamList } from "../navigation/types";
 import { Icon } from "../components/Icon";
 import { GlassContainer } from "../components/GlassContainer";
 import { ProviderIcon } from "../components/ProviderIcon";
+import { SwipeableRow } from "../components/SwipeableRow";
 import { useThemeColors } from "../constants/colors";
 import { formatRelativeTime } from "../core/formatTime";
 import { cn } from "../lib/utils";
@@ -29,6 +30,7 @@ export function WorkspaceDetailScreen({ route, navigation }: Props): JSX.Element
     getWorkspace,
     getTarget,
     sessions: allSessions,
+    deleteSession,
   } = useAppStore();
   const { accent } = useThemeColors();
 
@@ -82,41 +84,46 @@ export function WorkspaceDetailScreen({ route, navigation }: Props): JSX.Element
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 16, gap: 12, paddingTop: 8 }}
         renderItem={({ item }) => (
-          <Pressable
-            className="active:opacity-80"
-            onPress={() => navigation.navigate("AiChat", { sessionId: item.id, workspaceId: workspace.id })}
+          <SwipeableRow
+            onDelete={() => deleteSession(item.id)}
+            confirmTitle="Delete Session"
+            confirmMessage={`Delete this ${item.tool} session? This cannot be undone.`}
           >
-            <GlassContainer variant="card" className="p-3.5 gap-2.5">
-              <View className="flex-row justify-between items-center">
-                <View className="flex-row items-center gap-2">
-                  <ProviderIcon tool={item.tool as "claude" | "codex"} size={20} />
-                  <Text className="text-foreground text-sm font-semibold capitalize">{item.tool}</Text>
+            <Pressable
+              onPress={() => navigation.navigate("AiChat", { sessionId: item.id, workspaceId: workspace.id })}
+            >
+              <GlassContainer variant="card" className="p-3.5 gap-2.5">
+                <View className="flex-row justify-between items-center">
+                  <View className="flex-row items-center gap-2">
+                    <ProviderIcon tool={item.tool as "claude" | "codex"} size={20} />
+                    <Text className="text-foreground text-sm font-semibold capitalize">{item.tool}</Text>
+                  </View>
+                  <Text className="text-muted-foreground text-xs">
+                    {item.updatedAt ? formatRelativeTime(item.updatedAt) : "unknown"}
+                  </Text>
                 </View>
-                <Text className="text-muted-foreground text-xs">
-                  {item.updatedAt ? formatRelativeTime(item.updatedAt) : "unknown"}
+                <Text className="text-foreground text-sm" numberOfLines={2}>
+                  {sessionTitle(item)}
                 </Text>
-              </View>
-              <Text className="text-foreground text-sm" numberOfLines={2}>
-                {sessionTitle(item)}
-              </Text>
-              <View className="flex-row items-center justify-between">
-                <Text className="text-dimmed text-xs">
-                  {item.messages.length} messages
-                </Text>
-                <Text
-                  className={cn(
-                    "text-xs font-semibold capitalize",
-                    item.status === "idle" && "text-dimmed",
-                    item.status === "running" && "text-accent",
-                    item.status === "failed" && "text-destructive",
-                    (item.status === "cancelled" || item.status === "awaiting_input") && "text-warning",
-                  )}
-                >
-                  {item.status}
-                </Text>
-              </View>
-            </GlassContainer>
-          </Pressable>
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-dimmed text-xs">
+                    {item.messages.length} messages
+                  </Text>
+                  <Text
+                    className={cn(
+                      "text-xs font-semibold capitalize",
+                      item.status === "idle" && "text-dimmed",
+                      item.status === "running" && "text-accent",
+                      item.status === "failed" && "text-destructive",
+                      (item.status === "cancelled" || item.status === "awaiting_input") && "text-warning",
+                    )}
+                  >
+                    {item.status}
+                  </Text>
+                </View>
+              </GlassContainer>
+            </Pressable>
+          </SwipeableRow>
         )}
         ListEmptyComponent={
           <View className="items-center py-8">

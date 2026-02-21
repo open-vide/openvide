@@ -74,10 +74,12 @@ export function ToolUseCard({
     const lang = filePath ? inferLanguageFromPath(filePath) : "";
 
     const buildEditDiff = (): string => {
+      const oldLines = oldStr.split("\n");
+      const newLines = newStr.split("\n");
       const lines: string[] = [];
-      lines.push(`--- a/${filePath}`, `+++ b/${filePath}`, "@@ edit @@");
-      for (const l of oldStr.split("\n")) lines.push(`-${l}`);
-      for (const l of newStr.split("\n")) lines.push(`+${l}`);
+      lines.push(`--- a/${filePath}`, `+++ b/${filePath}`, `@@ -1,${oldLines.length} +1,${newLines.length} @@`);
+      for (const l of oldLines) lines.push(`-${l}`);
+      for (const l of newLines) lines.push(`+${l}`);
       return lines.join("\n");
     };
 
@@ -137,8 +139,9 @@ export function ToolUseCard({
     const contentLines = content.length > 0 ? content.split("\n").length : 0;
 
     const buildWriteDiff = (): string => {
-      const lines: string[] = [`--- /dev/null`, `+++ b/${filePath}`, "@@ new file @@"];
-      for (const l of content.split("\n")) lines.push(`+${l}`);
+      const contentLines = content.split("\n");
+      const lines: string[] = [`--- /dev/null`, `+++ b/${filePath}`, `@@ -0,0 +1,${contentLines.length} @@`];
+      for (const l of contentLines) lines.push(`+${l}`);
       return lines.join("\n");
     };
 

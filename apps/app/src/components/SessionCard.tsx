@@ -30,7 +30,7 @@ export const SessionCard = React.memo(function SessionCard({
   const relativeTime = formatRelativeTime(session.updatedAt);
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" className="active:opacity-80">
+    <Pressable onPress={onPress} accessibilityRole="button">
       <GlassContainer variant="card" className="p-3.5 gap-2.5">
         <View className="flex-row justify-between items-center">
           <ProviderIcon tool={session.tool as "claude" | "codex"} size={20} />

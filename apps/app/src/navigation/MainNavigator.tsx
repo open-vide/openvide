@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { MainStackParamList } from "./types";
+import { useSidebar } from "./SidebarContext";
 
 import { WorkspaceListScreen } from "../screens/WorkspaceListScreen";
 import { WorkspaceDetailScreen } from "../screens/WorkspaceDetailScreen";
@@ -14,17 +15,29 @@ import { FileViewerScreen } from "../screens/FileViewerScreen";
 import { PortBrowserScreen } from "../screens/PortBrowserScreen";
 import { WebPreviewScreen } from "../screens/WebPreviewScreen";
 import { FileEditorScreen } from "../screens/FileEditorScreen";
+import { SessionDiffsScreen } from "../screens/SessionDiffsScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { HamburgerButton } from "../components/HamburgerButton";
 import { useThemeColors } from "../constants/colors";
 
 const Stack = createNativeStackNavigator<MainStackParamList>();
 
+const ROOT_SCREENS = new Set(["WorkspaceList", "Hosts", "Settings"]);
+
 export function MainNavigator(): JSX.Element {
   const { headerBg, foreground, background } = useThemeColors();
+  const { setIsAtRoot } = useSidebar();
+
+  const handleStateChange = useCallback((state: any) => {
+    if (!state) return;
+    const routes = state.routes ?? [];
+    const currentRoute = routes[state.index ?? 0];
+    setIsAtRoot(ROOT_SCREENS.has(currentRoute?.name ?? ""));
+  }, [setIsAtRoot]);
 
   return (
     <Stack.Navigator
+      screenListeners={{ state: (e: any) => handleStateChange(e.data?.state) }}
       screenOptions={{
         headerStyle: { backgroundColor: headerBg },
         headerTintColor: foreground,
@@ -107,6 +120,11 @@ export function MainNavigator(): JSX.Element {
         name="FileEditor"
         component={FileEditorScreen}
         options={{ title: "Editor" }}
+      />
+      <Stack.Screen
+        name="SessionDiffs"
+        component={SessionDiffsScreen}
+        options={{ title: "Diffs" }}
       />
     </Stack.Navigator>
   );

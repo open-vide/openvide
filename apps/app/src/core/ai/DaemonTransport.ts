@@ -413,6 +413,31 @@ export class DaemonTransport {
     return sessions as unknown as WorkspaceChatInfo[];
   }
 
+  async runSshCommand(
+    target: TargetProfile,
+    credentials: SshCredentials,
+    command: string,
+    timeoutMs = 15000,
+  ): Promise<{ stdout: string; exitCode: number }> {
+    const handle = await this.ssh.runCommand(
+      target,
+      credentials,
+      command,
+      {
+        onStdout: () => {},
+        onStderr: () => {},
+      },
+      { mode: "scripted" },
+    );
+    const result = await Promise.race([
+      handle.wait,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("SSH command timed out")), timeoutMs),
+      ),
+    ]);
+    return { stdout: stripAnsi(result.stdout), exitCode: result.exitCode ?? 1 };
+  }
+
   private async execDaemonCommand(
     target: TargetProfile,
     credentials: SshCredentials,

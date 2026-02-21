@@ -145,82 +145,82 @@ export function InputBar({
   const showCancel = isRunning && !hasText && !isListening;
 
   return (
-    <View style={{ paddingBottom: Math.max(12, inset), paddingTop: 12 }}>
-    <View className="flex-row items-end px-3 gap-2">
-      {/* Text field / waveform area */}
-      <View className="flex-1 flex-row items-end bg-muted rounded-2xl" style={{ minHeight: 54 }}>
-        {isListening ? (
-          <WaveformBars />
-        ) : (
-          <TextInput
-            className="flex-1 text-foreground text-[16px] pl-4 pr-1 max-h-[120px]"
-            style={{ paddingTop: 8, paddingBottom: 18 }}
-            value={text}
-            onChangeText={onChangeText}
-            placeholder={
-              isRunning && !hasText ? "Running\u2026 type to queue" : placeholder
-            }
-            placeholderTextColor={dimmed}
-            multiline
-            maxLength={4000}
-            returnKeyType="default"
-            accessibilityLabel="Message input"
-          />
-        )}
-        {/* Attach + Mic / Send buttons inside the text field */}
-        {!isListening && (
-          <View className="flex-row items-center">
-            {onAttachPress && !hasText && (
-              <Pressable
-                className="h-[54px] items-center justify-center pl-1 active:opacity-80"
-                onPress={onAttachPress}
-                accessibilityRole="button"
-                accessibilityLabel="Attach file"
-              >
-                <Icon name="paperclip" size={20} color={dimmed} />
-              </Pressable>
-            )}
-            <Pressable
-              className="h-[54px] items-center justify-center pl-2 pr-3 active:opacity-80"
-              onPress={hasText ? handleSend : handleMicPress}
-              accessibilityRole="button"
-              accessibilityLabel={hasText ? "Send" : "Voice input"}
-            >
-              {hasText ? (
-                <View className="w-9 h-9 rounded-full bg-accent items-center justify-center">
-                  <Icon name="send" size={18} color="#FFFFFF" />
-                </View>
-              ) : (
-                <Icon name="mic" size={22} color={dimmed} />
+    <View style={{ paddingBottom: Math.max(12, inset) }}>
+      <View className="flex-row items-end px-3 gap-2">
+        {/* Text field / waveform area */}
+        <View className="flex-1 flex-row items-end bg-muted rounded-2xl" style={{ minHeight: 54 }}>
+          {isListening ? (
+            <WaveformBars />
+          ) : (
+            <TextInput
+              className="flex-1 text-foreground text-[16px] pl-4 pr-1 max-h-[120px]"
+              style={{ paddingTop: 0, paddingBottom: 18 }}
+              value={text}
+              onChangeText={onChangeText}
+              placeholder={
+                isRunning && !hasText ? "Running\u2026 type to queue" : placeholder
+              }
+              placeholderTextColor={dimmed}
+              multiline
+              maxLength={4000}
+              returnKeyType="default"
+              accessibilityLabel="Message input"
+            />
+          )}
+          {/* Attach + Mic / Send buttons inside the text field */}
+          {!isListening && (
+            <View className="flex-row items-center">
+              {onAttachPress && !hasText && (
+                <Pressable
+                  className="h-[54px] items-center justify-center pl-1 active:opacity-80"
+                  onPress={onAttachPress}
+                  accessibilityRole="button"
+                  accessibilityLabel="Attach file"
+                >
+                  <Icon name="paperclip" size={20} color={dimmed} />
+                </Pressable>
               )}
-            </Pressable>
-          </View>
-        )}
-      </View>
+              <Pressable
+                className="h-[54px] items-center justify-center pl-2 pr-3 active:opacity-80"
+                onPress={hasText ? handleSend : handleMicPress}
+                accessibilityRole="button"
+                accessibilityLabel={hasText ? "Send" : "Voice input"}
+              >
+                {hasText ? (
+                  <View className="w-9 h-9 rounded-full bg-accent items-center justify-center">
+                    <Icon name="send" size={18} color="#FFFFFF" />
+                  </View>
+                ) : (
+                  <Icon name="mic" size={22} color={dimmed} />
+                )}
+              </Pressable>
+            </View>
+          )}
+        </View>
 
-      {/* External button: only for cancel (running) or voice-listening stop */}
-      {isListening ? (
-        <Pressable
-          className="bg-foreground w-[54px] h-[54px] rounded-full items-center justify-center active:opacity-80"
-          onPress={handleMicPress}
-          accessibilityRole="button"
-          accessibilityLabel="Stop listening"
-        >
-          <Animated.View style={{ opacity: pulseAnim }}>
-            <Icon name="mic" size={20} color="#FFFFFF" />
-          </Animated.View>
-        </Pressable>
-      ) : showCancel ? (
-        <Pressable
-          className="bg-destructive w-[54px] h-[54px] rounded-full items-center justify-center active:opacity-80"
-          onPress={() => onCancel?.()}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel"
-        >
-          <Icon name="x" size={20} color="#FFFFFF" />
-        </Pressable>
-      ) : null}
-    </View>
+        {/* External button: only for cancel (running) or voice-listening stop */}
+        {isListening ? (
+          <Pressable
+            className="bg-foreground w-[54px] h-[54px] rounded-full items-center justify-center active:opacity-80"
+            onPress={handleMicPress}
+            accessibilityRole="button"
+            accessibilityLabel="Stop listening"
+          >
+            <Animated.View style={{ opacity: pulseAnim }}>
+              <Icon name="mic" size={20} color="#FFFFFF" />
+            </Animated.View>
+          </Pressable>
+        ) : showCancel ? (
+          <Pressable
+            className="bg-destructive w-[54px] h-[54px] rounded-full items-center justify-center active:opacity-80"
+            onPress={() => onCancel?.()}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+          >
+            <Icon name="x" size={20} color="#FFFFFF" />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }

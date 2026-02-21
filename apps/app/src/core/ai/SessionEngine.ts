@@ -19,6 +19,7 @@ import { getContextWindow, getDefaultModel } from "../modelOptions";
 import { getAdapter } from "./adapterRegistry";
 import type { CliStreamEvent } from "./adapterTypes";
 import { DaemonTransport, type DaemonOutputLine } from "./DaemonTransport";
+import { splitMultiFileDiff } from "../diffParser";
 
 type SessionListener = (session: AiSession) => void;
 
@@ -174,7 +175,11 @@ export class SessionEngine {
         const toolName = event.block.toolName ?? "tool";
         const input = event.block.toolInput as Record<string, unknown> | undefined;
         const detail = (input?.["file_path"] as string) ?? (input?.["command"] as string) ?? "";
-        event.block.activityText = detail ? `${toolName}: ${detail.slice(0, 80)}` : toolName;
+        // Only set activityText for tools whose card title doesn't already show the detail
+        const titleShowsDetail = ["Read", "Edit", "Write", "MultiEdit", "Grep", "Glob"].includes(toolName);
+        if (!titleShowsDetail) {
+          event.block.activityText = detail ? `${toolName}: ${detail.slice(0, 80)}` : toolName;
+        }
 
         // Set awaiting_input when the AI asks the user a question
         if (toolName === "AskUserQuestion") {
@@ -826,6 +831,24 @@ export class SessionEngine {
         await this.persist(session);
       }
 
+      // Snapshot working tree before the turn (for Codex post-turn diff).
+      // git stash create produces a commit object of the current state without
+      // modifying the working tree. If the tree is clean it returns empty, so we
+      // fall back to HEAD. After the turn we diff against this ref to see exactly
+      // what Codex changed — regardless of whether it committed or not.
+      // Timestamp marker: touch a temp file before the turn, then after the turn
+      // find all files modified since that marker. Works for tracked + untracked files.
+      const markerFile = `/tmp/.ov-preturn-${session.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+      let hasMarker = false;
+      if (session.tool === "codex" && session.workingDirectory) {
+        try {
+          await this.transport.runSshCommand(target, credentials, `touch '${markerFile}'`);
+          hasMarker = true;
+        } catch {
+          // Non-critical
+        }
+      }
+
       // Step 2: Send the prompt to the daemon
       console.log("[OV:engine] sending turn to daemon:", session.daemonSessionId);
       try {
@@ -946,6 +969,32 @@ export class SessionEngine {
       if (turnEnded && (turnExitCode === 0 || turnExitCode == null)) {
         this.updateStatus(session, "idle");
         console.log("[OV:engine] turn completed successfully via daemon, session idle");
+
+        // Fetch git diffs for Codex turns — diff against pre-turn snapshot
+        if (session.tool === "codex" && session.workingDirectory && preTurnRef) {
+          try {
+            const wd = session.workingDirectory.replace(/'/g, "'\\''");
+            const diffCmd = `cd '${wd}' && git --no-pager diff '${preTurnRef}' --no-color 2>/dev/null || true`;
+            const diffResult = await this.transport.runSshCommand(target, credentials, diffCmd);
+            const fileDiffs = splitMultiFileDiff(diffResult.stdout);
+            console.log("[OV:engine] post-turn diff:", fileDiffs.length, "files changed");
+            if (fileDiffs.length > 0) {
+              const msg = session.messages[session.messages.length - 1];
+              if (msg && msg.role === "assistant") {
+                for (const fd of fileDiffs) {
+                  msg.content.push({
+                    type: "file_change",
+                    filePath: fd.filePath,
+                    diff: fd.diff,
+                  });
+                }
+                console.log("[OV:engine] injected", fileDiffs.length, "file_change blocks");
+              }
+            }
+          } catch (err) {
+            console.warn("[OV:engine] post-turn diff failed:", err instanceof Error ? err.message : String(err));
+          }
+        }
       } else if (turnExitCode != null && turnExitCode !== 0) {
         const stderrTail = stderrLines.slice(-10).join("\n").trim();
         const errorText = stderrTail

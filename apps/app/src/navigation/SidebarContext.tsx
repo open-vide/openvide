@@ -9,6 +9,8 @@ const SPRING_CONFIG = { damping: 18, stiffness: 200, mass: 0.7 };
 interface SidebarContextValue {
   drawerProgress: SharedValue<number>;
   isOpen: boolean;
+  isAtRoot: boolean;
+  setIsAtRoot: (value: boolean) => void;
   openSidebar: () => void;
   closeSidebar: () => void;
   toggleSidebar: () => void;
@@ -21,6 +23,7 @@ const SidebarContext = createContext<SidebarContextValue | null>(null);
 export function SidebarProvider({ children }: { children: React.ReactNode }): JSX.Element {
   const drawerProgress = useSharedValue(0);
   const [isOpen, setIsOpen] = useState(false);
+  const [isAtRoot, setIsAtRoot] = useState(true);
   const [activeSection, setActiveSection] = useState<SidebarSection>("sessions");
 
   const openSidebar = useCallback(() => {
@@ -47,13 +50,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }): JS
     () => ({
       drawerProgress,
       isOpen,
+      isAtRoot,
+      setIsAtRoot,
       openSidebar,
       closeSidebar,
       toggleSidebar,
       activeSection,
       setActiveSection,
     }),
-    [drawerProgress, isOpen, openSidebar, closeSidebar, toggleSidebar, activeSection],
+    [drawerProgress, isOpen, isAtRoot, openSidebar, closeSidebar, toggleSidebar, activeSection],
   );
 
   return <SidebarContext value={value}>{children}</SidebarContext>;

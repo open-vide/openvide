@@ -174,17 +174,27 @@ export const codexAdapter: CliAdapter = {
         } else if (name === "apply_patch" || name === "apply_diff") {
           // Codex file patching — extract patch content as diff
           let patch = args ?? "";
+          let patchFilePath = "";
           try {
             const parsed = JSON.parse(args ?? "{}") as Record<string, unknown>;
             patch = (typeof parsed["patch"] === "string" ? parsed["patch"] : undefined)
               ?? (typeof parsed["diff"] === "string" ? parsed["diff"] : undefined)
               ?? (typeof parsed["content"] === "string" ? parsed["content"] : undefined)
               ?? args ?? "";
+            patchFilePath = (typeof parsed["path"] === "string" ? parsed["path"] : undefined)
+              ?? (typeof parsed["file_path"] === "string" ? parsed["file_path"] : undefined) ?? "";
           } catch { /* args is the raw patch text */ }
+          // Try to extract file path from patch content (e.g. "*** Update File: path/to/file" or "+++ b/path")
+          if (!patchFilePath && patch) {
+            const updateMatch = /\*\*\*\s+(?:Update|Add|Create)\s+File:\s*(.+)/m.exec(patch);
+            const plusMatch = /^\+\+\+ b\/(.+)$/m.exec(patch);
+            patchFilePath = updateMatch?.[1]?.trim() ?? plusMatch?.[1]?.trim() ?? "";
+          }
+          console.log("[OV:codex] apply_patch:", "filePath=" + patchFilePath.slice(0, 80), "patch_len=" + patch.length);
           events.push({
             type: "content_block",
             role: "assistant",
-            block: { type: "file_change", filePath: "", diff: patch },
+            block: { type: "file_change", filePath: patchFilePath, diff: patch },
           });
         } else if (name === "write_file" || name === "create_file") {
           let filePath = "";
@@ -242,9 +252,12 @@ export const codexAdapter: CliAdapter = {
         });
       } else if (itemType === "file_change") {
         const filePath = (typeof item["file_path"] === "string" ? item["file_path"] : undefined)
-          ?? (typeof item["path"] === "string" ? item["path"] : undefined) ?? "";
+          ?? (typeof item["path"] === "string" ? item["path"] : undefined)
+          ?? (typeof item["filename"] === "string" ? item["filename"] : undefined) ?? "";
         const diff = (typeof item["diff"] === "string" ? item["diff"] : undefined)
-          ?? (typeof item["content"] === "string" ? item["content"] : undefined) ?? "";
+          ?? (typeof item["content"] === "string" ? item["content"] : undefined)
+          ?? (typeof item["patch"] === "string" ? item["patch"] : undefined) ?? "";
+        console.log("[OV:codex] file_change item:", "filePath=" + filePath.slice(0, 80), "diff_len=" + diff.length, "keys=" + Object.keys(item).join(","));
         events.push({
           type: "content_block",
           role: "assistant",
