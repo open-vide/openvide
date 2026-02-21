@@ -811,6 +811,10 @@ export class SessionEngine {
 
     const signal = { cancelled: false };
 
+    // Codex diff marker — declared outside try so cleanup runs on all paths
+    const markerFile = `/tmp/.ov-preturn-${session.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+    let hasMarker = false;
+
     try {
       // Step 1: Create daemon session if needed
       if (!session.daemonSessionId) {
@@ -834,8 +838,6 @@ export class SessionEngine {
       // Timestamp marker for Codex post-turn diff: touch a temp file before the turn,
       // then after the turn use `find -newer` to discover files modified during the turn.
       // Works for tracked + untracked files alike.
-      const markerFile = `/tmp/.ov-preturn-${session.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
-      let hasMarker = false;
       if (session.tool === "codex" && session.workingDirectory) {
         try {
           await this.transport.runSshCommand(target, credentials, `touch '${markerFile}'`);
@@ -966,74 +968,62 @@ export class SessionEngine {
         this.updateStatus(session, "idle");
         console.log("[OV:engine] turn completed successfully via daemon, session idle");
 
-        // Fetch git diffs for Codex turns — only files modified during this turn
+        // Fetch git diffs for Codex turns — only files modified during this turn.
+        // Writes diff output to a temp file on the remote (avoids PTY noise corrupting
+        // the diff text in stdout), then reads it back with cat.
         if (session.tool === "codex" && session.workingDirectory && hasMarker) {
           try {
             const wd = session.workingDirectory.replace(/'/g, "'\\''");
+            const diffFile = `/tmp/.ov-diff-${session.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
-            // Find files modified since the pre-turn timestamp marker (excluding .git)
-            const findCmd = `find '${wd}' -newer '${markerFile}' -type f -not -path '*/.git/*' 2>/dev/null | head -100`;
-            const findResult = await this.transport.runSshCommand(target, credentials, findCmd);
-            const modifiedFiles = findResult.stdout.trim().split("\n").filter((f: string) => f.length > 0);
-            console.log("[OV:engine] post-turn find:", modifiedFiles.length, "files modified since marker");
+            // Step 1: Generate diffs → write to temp file (stdout is empty)
+            const genCmd =
+              `cd '${wd}' && ` +
+              `find . -newer '${markerFile}' -type f ! -path '*/.git/*' 2>/dev/null` +
+              ` | head -100 | while IFS= read -r f; do` +
+              ` rel="\${f#./}";` +
+              ` d=$(git --no-pager diff HEAD --no-color -- "$rel" 2>/dev/null);` +
+              ` if [ -n "$d" ]; then printf '%s\\n' "$d";` +
+              ` else` +
+              ` printf 'diff --git a/%s b/%s\\nnew file mode 100644\\n--- /dev/null\\n+++ b/%s\\n' "$rel" "$rel" "$rel";` +
+              ` lines=$(wc -l < "$rel" 2>/dev/null | tr -d ' ');` +
+              ` : "\${lines:=0}";` +
+              ` printf '@@ -0,0 +1,%s @@\\n' "$lines";` +
+              ` sed 's/^/+/' "$rel" 2>/dev/null;` +
+              ` fi;` +
+              ` done > '${diffFile}' 2>/dev/null`;
 
-            if (modifiedFiles.length > 0) {
-              // Build per-file diffs: tracked files get git diff HEAD, untracked get new-file diff
-              const diffParts: string[] = [];
-              for (const absPath of modifiedFiles) {
-                // Convert absolute path to relative path from working directory
-                const rel = absPath.startsWith(session.workingDirectory + "/")
-                  ? absPath.slice(session.workingDirectory.length + 1)
-                  : absPath.replace(/^.*\//, "");
-                const relEsc = rel.replace(/'/g, "'\\''");
+            await this.transport.runSshCommand(target, credentials, genCmd, 20000);
 
-                // Try git diff HEAD first (works for tracked files); if empty, generate new-file diff
-                const perFileCmd = [
-                  `cd '${wd}'`,
-                  `d=$(git --no-pager diff HEAD --no-color -- '${relEsc}' 2>/dev/null)`,
-                  `if [ -n "$d" ]; then echo "$d"; else`,
-                  `echo "diff --git a/${rel} b/${rel}"`,
-                  `echo "new file mode 100644"`,
-                  `echo "--- /dev/null"`,
-                  `echo "+++ b/${rel}"`,
-                  `lines=$(wc -l < '${relEsc}' 2>/dev/null | tr -d ' ' || echo 0)`,
-                  `echo "@@ -0,0 +1,$lines @@"`,
-                  `sed 's/^/+/' '${relEsc}' 2>/dev/null`,
-                  `fi`,
-                ].join(" && ");
+            // Step 2: Read the diff file — find first "diff --git" to skip
+            // the command echo, then splitMultiFileDiff strips trailing PTY noise
+            const catResult = await this.transport.runSshCommand(target, credentials,
+              `cat '${diffFile}' 2>/dev/null`);
+            const diffStart = catResult.stdout.indexOf("diff --git ");
+            const rawDiff = diffStart >= 0 ? catResult.stdout.slice(diffStart).trim() : "";
+            console.log("[OV:engine] post-turn diff file:", rawDiff.length, "chars, first200:", rawDiff.slice(0, 200));
 
-                try {
-                  const r = await this.transport.runSshCommand(target, credentials, perFileCmd);
-                  if (r.stdout.trim().length > 0) {
-                    diffParts.push(r.stdout.trim());
+            if (rawDiff.length > 0) {
+              const fileDiffs = splitMultiFileDiff(rawDiff);
+              console.log("[OV:engine] post-turn diff:", fileDiffs.length, "file diffs parsed");
+              if (fileDiffs.length > 0) {
+                const msg = session.messages[session.messages.length - 1];
+                if (msg && msg.role === "assistant") {
+                  for (const fd of fileDiffs) {
+                    msg.content.push({
+                      type: "file_change",
+                      filePath: fd.filePath,
+                      diff: fd.diff,
+                    });
                   }
-                } catch {
-                  // Skip files that fail
+                  console.log("[OV:engine] injected", fileDiffs.length, "file_change blocks");
                 }
               }
-
-              if (diffParts.length > 0) {
-                const combined = diffParts.join("\n");
-                const fileDiffs = splitMultiFileDiff(combined);
-                console.log("[OV:engine] post-turn diff:", fileDiffs.length, "file diffs parsed");
-                if (fileDiffs.length > 0) {
-                  const msg = session.messages[session.messages.length - 1];
-                  if (msg && msg.role === "assistant") {
-                    for (const fd of fileDiffs) {
-                      msg.content.push({
-                        type: "file_change",
-                        filePath: fd.filePath,
-                        diff: fd.diff,
-                      });
-                    }
-                    console.log("[OV:engine] injected", fileDiffs.length, "file_change blocks");
-                  }
-                }
-              }
+            } else {
+              console.log("[OV:engine] post-turn diff: no modified files found");
             }
 
-            // Clean up marker file
-            await this.transport.runSshCommand(target, credentials, `rm -f '${markerFile}'`).catch(() => {});
+            // Temp file cleanup handled at end of executeTurn
           } catch (err) {
             console.warn("[OV:engine] post-turn diff failed:", err instanceof Error ? err.message : String(err));
           }
@@ -1073,6 +1063,13 @@ export class SessionEngine {
 
       this.updateStatus(session, "failed");
       console.error("[OV:engine] turn EXCEPTION:", message);
+    }
+
+    // Clean up Codex temp files regardless of success/failure
+    if (hasMarker) {
+      const diffFile = `/tmp/.ov-diff-${session.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+      this.transport.runSshCommand(target, credentials, `rm -f '${markerFile}' '${diffFile}'`)
+        .catch(() => {});
     }
 
     // Guard: session may have been removed mid-turn

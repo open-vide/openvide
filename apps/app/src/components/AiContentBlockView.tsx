@@ -211,7 +211,7 @@ export const AiContentBlockView = React.memo(function AiContentBlockView({
       const trimmedResult = resultText.trim();
       // Skip rendering if the result is just a tool-name echo (e.g. "Read: /path", "Edit: /path")
       // since the ToolUseCard above already displays this info
-      if (/^(Read|Edit|Write|Bash|Grep|Glob|MultiEdit):\s/.test(trimmedResult) && !trimmedResult.includes("\n")) {
+      if (/^(Read|Edit|Write|Bash|Grep|Glob|MultiEdit):\s/.test(trimmedResult) && !trimmedResult.includes("\n") && !block.isError) {
         return <View />;
       }
       const looksLikeDiff = resultText.includes("@@") && (resultText.includes("---") || resultText.includes("+++"));

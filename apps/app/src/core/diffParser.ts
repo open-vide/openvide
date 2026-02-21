@@ -20,9 +20,27 @@ export interface ParsedDiff {
   hunks: DiffHunk[];
 }
 
+/** Returns true if the line is a valid part of a unified diff */
+function isDiffLine(line: string): boolean {
+  return /^[+\- @]/.test(line) ||
+    line.startsWith("diff ") ||
+    line.startsWith("---") ||
+    line.startsWith("+++") ||
+    line.startsWith("new file") ||
+    line.startsWith("deleted file") ||
+    line.startsWith("index ") ||
+    line.startsWith("old mode") ||
+    line.startsWith("new mode") ||
+    line.startsWith("rename") ||
+    line.startsWith("similarity") ||
+    line.startsWith("Binary") ||
+    line.startsWith("\\ No newline");
+}
+
 /**
  * Splits raw `git diff` output into per-file chunks.
  * Each chunk includes the full diff text for that file (diff --git header through last hunk).
+ * Strips trailing non-diff lines (SSH/PTY noise like exit markers and prompt chars).
  */
 export function splitMultiFileDiff(raw: string): Array<{ filePath: string; diff: string }> {
   const results: Array<{ filePath: string; diff: string }> = [];
@@ -36,7 +54,13 @@ export function splitMultiFileDiff(raw: string): Array<{ filePath: string; diff:
     const plusMatch = /^\+\+\+ b\/(.+)$/m.exec(trimmed);
     if (!plusMatch?.[1]) continue;
 
-    results.push({ filePath: plusMatch[1], diff: trimmed });
+    // Strip trailing non-diff lines (PTY noise: exit markers, prompt chars, etc.)
+    const lines = trimmed.split("\n");
+    while (lines.length > 0 && !isDiffLine(lines[lines.length - 1]!)) {
+      lines.pop();
+    }
+
+    results.push({ filePath: plusMatch[1], diff: lines.join("\n") });
   }
 
   return results;
@@ -119,15 +143,8 @@ export function parseDiff(text: string): ParsedDiff[] {
                   i++;
                   continue;
                 } else {
-                  // Treat as context with no prefix
-                  hunkLines.push({
-                    type: "context",
-                    text: contentLine,
-                    oldLineNum: oldLine,
-                    newLineNum: newLine,
-                  });
-                  oldLine++;
-                  newLine++;
+                  // Unrecognized line — stop parsing this hunk (likely PTY noise)
+                  break;
                 }
                 i++;
               }

@@ -429,13 +429,18 @@ export class DaemonTransport {
       },
       { mode: "scripted" },
     );
-    const result = await Promise.race([
-      handle.wait,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("SSH command timed out")), timeoutMs),
-      ),
-    ]);
-    return { stdout: stripAnsi(result.stdout), exitCode: result.exitCode ?? 1 };
+    try {
+      const result = await Promise.race([
+        handle.wait,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("SSH command timed out")), timeoutMs),
+        ),
+      ]);
+      return { stdout: stripAnsi(result.stdout), exitCode: result.exitCode ?? 1 };
+    } catch (err) {
+      handle.cancel().catch(() => {});
+      throw err;
+    }
   }
 
   private async execDaemonCommand(
