@@ -7,15 +7,14 @@ function buildClaudeCommand(opts: BuildCommandOpts): string {
     "-p", escapeShellArg(opts.prompt),
     "--output-format", "stream-json",
     "--verbose",
+    // Always skip permissions — daemon is non-interactive, can't prompt user
+    "--dangerously-skip-permissions",
   ];
   if (opts.conversationId) {
     parts.push("--resume", escapeShellArg(opts.conversationId));
   }
   if (opts.model) {
     parts.push("--model", escapeShellArg(opts.model));
-  }
-  if (opts.autoAccept) {
-    parts.push("--dangerously-skip-permissions");
   }
   return parts.join(" ");
 }

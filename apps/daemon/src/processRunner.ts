@@ -72,6 +72,9 @@ export function spawnTurn(
     env: augmentedEnv(),
   });
 
+  // Close stdin immediately — daemon is non-interactive, no CLI should wait for input
+  child.stdin?.end();
+
   let conversationId: string | undefined;
 
   // Write turn_start marker

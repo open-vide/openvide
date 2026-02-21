@@ -27,7 +27,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
-          <string>com.arm4x.remotedevtoolv2</string>
+          <string>com.mrirony.openvide</string>
         </array>
       </dict>
       <dict>
@@ -62,6 +62,8 @@
     <string>This app connects to SSH servers on your local network to manage remote development tools.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to use the microphone for voice input</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your photos</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to use speech recognition.</string>
     <key>RCTNewArchEnabled</key>
