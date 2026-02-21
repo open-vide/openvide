@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.mr_irony.openvide'
+    namespace 'com.arm4x.remotedevtoolv2'
     defaultConfig {
-        applicationId 'com.mr_irony.openvide'
+        applicationId 'com.arm4x.remotedevtoolv2'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

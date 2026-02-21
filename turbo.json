@@ -29,6 +29,9 @@
     "ios": {
       "cache": false
     },
+    "ios:install": {
+      "cache": false
+    },
     "android": {
       "cache": false
     },

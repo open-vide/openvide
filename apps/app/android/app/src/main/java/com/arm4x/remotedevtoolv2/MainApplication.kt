@@ -1,4 +1,4 @@
-package com.mr_irony.openvide
+package com.arm4x.remotedevtoolv2
 
 import android.app.Application
 import android.content.res.Configuration

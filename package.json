@@ -13,6 +13,7 @@
     "start": "turbo run start --filter=@openvide/app",
     "web": "turbo run web --filter=@openvide/app",
     "ios": "turbo run ios --filter=@openvide/app",
+    "ios:install": "turbo run ios:install --filter=@openvide/app",
     "android": "turbo run android --filter=@openvide/app",
     "prebuild": "turbo run prebuild --filter=@openvide/app",
     "prebuild:clean": "turbo run prebuild:clean --filter=@openvide/app",
