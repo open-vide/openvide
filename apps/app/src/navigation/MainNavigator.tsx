@@ -42,6 +42,7 @@ export function MainNavigator(): JSX.Element {
         headerStyle: { backgroundColor: headerBg },
         headerTintColor: foreground,
         contentStyle: { backgroundColor: background },
+        fullScreenGestureEnabled: true,
       }}
     >
       {/* Root screens — get hamburger button */}

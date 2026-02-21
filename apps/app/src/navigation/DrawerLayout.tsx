@@ -118,10 +118,13 @@ function DrawerInner(): JSX.Element {
           </Animated.View>
         </GestureDetector>
 
-        {/* Invisible edge strip for opening — doesn't block any child gestures */}
-        <GestureDetector gesture={edgePan}>
-          <Animated.View style={[styles.edgeStrip, edgePointerEvents]} />
-        </GestureDetector>
+        {/* Invisible edge strip for opening — only on root screens so the
+            native iOS back swipe gesture works freely on pushed screens */}
+        {isAtRoot && (
+          <GestureDetector gesture={edgePan}>
+            <Animated.View style={[styles.edgeStrip, edgePointerEvents]} />
+          </GestureDetector>
+        )}
       </Animated.View>
     </Animated.View>
   );
