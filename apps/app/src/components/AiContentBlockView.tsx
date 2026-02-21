@@ -261,23 +261,18 @@ export const AiContentBlockView = React.memo(function AiContentBlockView({
         <View className="gap-1.5">
           {/* Command header */}
           <View className="bg-muted rounded-t-lg border border-border px-3 py-2">
-            <CodeBlock code={`$ ${block.command}`} language="bash" showCopyButton={false} />
+            <CodeBlock code={`$ ${block.command}`} language="bash" showCopyButton={true} />
           </View>
           {/* Output */}
-          {block.output != null && (
+          {block.output != null && block.output.length > 0 && (
             <TruncatedText text={block.output} maxLines={200}>
               {(visibleText) => (
                 <MonoBlock text={visibleText} copyable />
               )}
             </TruncatedText>
           )}
-          {block.exitCode != null && (
-            <View
-              className={cn(
-                "self-start rounded-md px-2 py-0.5",
-                block.exitCode === 0 ? "bg-success" : "bg-destructive",
-              )}
-            >
+          {block.exitCode != null && block.exitCode !== 0 && (
+            <View className="self-start rounded-md px-2 py-0.5 bg-destructive">
               <Text selectable className="text-white text-[11px] font-bold font-mono">
                 exit {block.exitCode}
               </Text>

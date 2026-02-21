@@ -290,7 +290,7 @@ export function FileViewerScreen(): JSX.Element {
               code={content}
               language={language || undefined}
               showLineNumbers
-              showCopyButton={false}
+              showCopyButton={true}
               selectable
             />
           </ScrollView>

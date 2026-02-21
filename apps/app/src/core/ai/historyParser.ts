@@ -223,11 +223,8 @@ function parseDaemonHistory(tool: ToolName, lines: string[]): ParsedHistory {
     }
 
     if (t === "e") {
-      const line = typeof parsed.line === "string" ? parsed.line : "";
-      if (line.trim().length > 0) {
-        const msg = ensureAssistantMessage(history, currentTurn, ts);
-        msg.content.push({ type: "error", text: line });
-      }
+      // Ignore stderr — many CLIs log non-error info to stderr (Codex state db warnings, etc.)
+      // Stderr is only shown when the turn fails, handled by the turn_end exit code check.
       continue;
     }
 

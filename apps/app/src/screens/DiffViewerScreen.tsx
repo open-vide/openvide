@@ -75,7 +75,7 @@ export function DiffViewerScreen(): JSX.Element {
         {hasDiffContent ? (
           <DiffView diff={diff} filePath={filePath} language={language} mode={mode} />
         ) : (
-          <CodeBlock code={diff} language={language} showCopyButton={false} />
+          <CodeBlock code={diff} language={language} showCopyButton={true} />
         )}
       </ScrollView>
     </View>

@@ -653,9 +653,8 @@ export class SessionEngine {
             }
 
             if (line.t === "e" && line.line != null) {
-              const msg = this.getOrCreateAssistantMessage(current, currentTurnIndex);
-              msg.content.push({ type: "error", text: line.line });
-              this.notifyThrottled(current);
+              // Collect stderr but don't surface in UI — many CLIs log non-error info to stderr.
+              // Stderr is shown only when the turn fails (non-zero exit code).
               return;
             }
 
@@ -896,11 +895,9 @@ export class SessionEngine {
             }
             jsonBuffer += line.line + "\n";
           } else if (line.t === "e" && line.line != null) {
+            // Collect stderr silently — only shown if the turn fails (non-zero exit code).
+            // Many CLIs log non-error info to stderr (Codex state db warnings, progress, etc.)
             stderrLines.push(line.line);
-            // Surface stderr in the chat UI in real-time
-            const msg = this.getOrCreateAssistantMessage(session, turnIndex);
-            msg.content.push({ type: "error", text: line.line });
-            this.notifyThrottled(session);
           } else if (line.t === "m") {
             if (line.event === "turn_end") {
               turnEnded = true;

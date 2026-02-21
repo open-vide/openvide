@@ -1,7 +1,8 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { tokenize, ONE_DARK_COLORS, type HighlightToken } from "../core/syntaxHighlight";
+import { Icon } from "./Icon";
 
 interface CodeBlockProps {
   code: string;
@@ -36,8 +37,16 @@ export const CodeBlock = React.memo(function CodeBlock({
   const truncated = maxLines ? lines.length > maxLines : false;
   const gutterWidth = showLineNumbers ? Math.max(String(displayLines.length).length * 9 + 12, 32) : 0;
 
-  const handleCopy = useCallback(() => {
-    void Clipboard.setStringAsync(trimmedCode);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await Clipboard.setStringAsync(trimmedCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.warn("[OV:clipboard] copy failed:", err);
+    }
   }, [trimmedCode]);
 
   return (
@@ -49,11 +58,11 @@ export const CodeBlock = React.memo(function CodeBlock({
           ) : <View />}
           {showCopyButton && (
             <Pressable
-              onPress={handleCopy}
-              className="px-2 py-1 rounded active:opacity-60"
+              onPress={() => void handleCopy()}
+              className="p-1.5 rounded active:opacity-60"
               hitSlop={8}
             >
-              <Text className="text-muted-foreground text-[11px]">Copy</Text>
+              <Icon name={copied ? "check" : "copy"} size={13} color={copied ? "#4ade80" : "#8E8E93"} />
             </Pressable>
           )}
         </View>
