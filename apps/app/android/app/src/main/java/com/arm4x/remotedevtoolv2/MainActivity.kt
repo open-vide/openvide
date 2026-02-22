@@ -1,4 +1,4 @@
-package com.mr_irony.openvide
+package com.arm4x.remotedevtoolv2
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

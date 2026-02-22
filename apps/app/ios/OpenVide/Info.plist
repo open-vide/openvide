@@ -27,7 +27,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
-          <string>com.mrirony.openvide</string>
+          <string>com.arm4x.remotedevtoolv2</string>
         </array>
       </dict>
       <dict>

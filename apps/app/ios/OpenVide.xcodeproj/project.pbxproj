@@ -165,7 +165,6 @@
 				LastUpgradeCheck = 1130;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
-						DevelopmentTeam = K72S33HTP3;
 						LastSwiftMigration = 1250;
 						ProvisioningStyle = Automatic;
 					};
@@ -353,7 +352,7 @@
 				CODE_SIGN_ENTITLEMENTS = OpenVide/OpenVide.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = K72S33HTP3;
+				DEVELOPMENT_TEAM = D2B544PLJP;
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -373,7 +372,7 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.mrirony.openvide;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arm4x.remotedevtoolv2;
 				PRODUCT_NAME = OpenVide;
 				SWIFT_OBJC_BRIDGING_HEADER = "OpenVide/OpenVide-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -392,7 +391,7 @@
 				CODE_SIGN_ENTITLEMENTS = OpenVide/OpenVide.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = K72S33HTP3;
+				DEVELOPMENT_TEAM = D2B544PLJP;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = arm64;
 				INFOPLIST_FILE = OpenVide/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
@@ -407,7 +406,7 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.mrirony.openvide;
+				PRODUCT_BUNDLE_IDENTIFIER = com.arm4x.remotedevtoolv2;
 				PRODUCT_NAME = OpenVide;
 				SWIFT_OBJC_BRIDGING_HEADER = "OpenVide/OpenVide-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
