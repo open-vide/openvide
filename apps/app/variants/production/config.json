@@ -1,0 +1,6 @@
+{
+  "displayName": "Open Vide",
+  "iosBundleIdentifier": "com.mrirony.openvide",
+  "androidPackage": "com.mr_irony.openvide",
+  "scheme": "openvide"
+}

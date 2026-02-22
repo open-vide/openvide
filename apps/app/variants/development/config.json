@@ -1,0 +1,6 @@
+{
+  "displayName": "OV Dev",
+  "iosBundleIdentifier": "com.mrirony.openvide.dev",
+  "androidPackage": "com.mr_irony.openvide.dev",
+  "scheme": "openvide-dev"
+}
