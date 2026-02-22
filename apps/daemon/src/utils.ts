@@ -19,7 +19,8 @@ export function daemonDir(): string {
 
 export function log(...args: unknown[]): void {
   const ts = new Date().toISOString();
-  console.log(`${ts} ${LOG_PREFIX}`, ...args);
+  // Keep stdout reserved for machine-readable JSON responses from CLI commands.
+  console.error(`${ts} ${LOG_PREFIX}`, ...args);
 }
 
 export function logError(...args: unknown[]): void {

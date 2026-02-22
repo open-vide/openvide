@@ -139,6 +139,7 @@ async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
     case "session.list_workspace": {
       const cwd = req.cwd as string | undefined;
       if (!cwd) return { ok: false, error: "Missing required: cwd" };
+      const startedAt = Date.now();
       const daemonSessions = sm.listSessions();
       const nativeSessions = await listNativeSessionsForWorkspace({ cwd, tool: "all" });
       const sessions = mergeWorkspaceSessions({
@@ -146,6 +147,9 @@ async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
         daemonSessions,
         nativeSessions,
       });
+      log(
+        `session.list_workspace cwd=${cwd} daemon=${daemonSessions.length} native=${nativeSessions.length} merged=${sessions.length} elapsedMs=${Date.now() - startedAt}`,
+      );
       return { ok: true, sessions };
     }
 

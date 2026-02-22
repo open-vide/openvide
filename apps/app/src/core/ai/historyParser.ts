@@ -4,6 +4,7 @@ import type { SessionHistoryPayload } from "./DaemonTransport";
 import { getAdapter } from "./adapterRegistry";
 import type { CliStreamEvent } from "./adapterTypes";
 import { getContextWindow, getDefaultModel } from "../modelOptions";
+import { sanitizeCodexToolOutput } from "./codexOutputSanitizer";
 
 export interface ParsedHistory {
   messages: AiMessage[];
@@ -490,11 +491,15 @@ function parseNativeCodex(lines: string[]): ParsedHistory {
 
     if (payloadType === "function_call_output") {
       const output = typeof payload.output === "string" ? payload.output : "";
+      const cleanedOutput = sanitizeCodexToolOutput(output);
+      if (!cleanedOutput) {
+        continue;
+      }
       const msg = ensureAssistantMessage(history, currentTurn, ts);
       msg.content.push({
         type: "tool_result",
         toolId: typeof payload.call_id === "string" ? payload.call_id : undefined,
-        result: clampText(output),
+        result: clampText(cleanedOutput),
       });
     }
   }

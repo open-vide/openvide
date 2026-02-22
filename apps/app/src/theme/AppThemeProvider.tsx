@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, use, useCallback, useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
+import { useColorScheme as useSystemColorScheme, View } from "react-native";
 import { useColorScheme } from "nativewind";
 import { vars } from "react-native-css-interop";
 import type { AppColorMode } from "./colorTokens";
@@ -24,7 +24,8 @@ function isThemePreference(value: string): value is ThemePreference {
 }
 
 export function AppThemeProvider({ children }: { children: React.ReactNode }): JSX.Element {
-  const { colorScheme, setColorScheme } = useColorScheme();
+  const { setColorScheme } = useColorScheme();
+  const systemColorScheme = useSystemColorScheme();
   const [themePreference, setThemePreferenceState] = useState<ThemePreference>("system");
 
   useEffect(() => {
@@ -69,8 +70,17 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }): J
   }, [setColorScheme]);
 
   const resolvedMode: AppColorMode = themePreference === "system"
-    ? (colorScheme === "dark" ? "dark" : "light")
+    ? (systemColorScheme === "dark" ? "dark" : "light")
     : themePreference;
+
+  // Keep NativeWind in sync when system appearance changes
+  useEffect(() => {
+    try {
+      setColorScheme(resolvedMode);
+    } catch {
+      // ignore
+    }
+  }, [resolvedMode, setColorScheme]);
 
   useEffect(() => {
     setResolvedThemeMode(resolvedMode);

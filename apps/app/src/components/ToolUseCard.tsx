@@ -204,16 +204,14 @@ export function ToolUseCard({
   if (toolName === "Bash") {
     const command = (input?.["command"] as string) ?? "";
     return (
-      <View>
-        <CollapsibleCard
-          title="Bash"
-          defaultOpen={showToolDetails || isRunning || !isCompleted}
-          titleRight={statusIndicator}
-        >
-          <MonoBlock text={command || JSON.stringify(input, null, 2)} language="bash" />
-        </CollapsibleCard>
+      <View className="gap-1">
+        <View className="flex-row items-center gap-1.5 px-1">
+          <Text className="text-dimmed text-xs font-semibold">Bash</Text>
+          {statusIndicator}
+        </View>
+        <CodeBlock code={command || JSON.stringify(input, null, 2)} language="bash" showCopyButton />
         {block.activityText && isRunning && (
-          <Text className="text-dimmed text-xs mt-1 ml-1">{block.activityText}</Text>
+          <Text className="text-dimmed text-xs mt-0.5 ml-1">{block.activityText}</Text>
         )}
       </View>
     );

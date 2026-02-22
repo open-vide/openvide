@@ -18,6 +18,7 @@ export interface SshRunHandle {
 
 export interface RunCommandOptions {
   mode?: "interactive" | "scripted";
+  conflictPolicy?: "queue" | "preempt";
 }
 
 type AnySshClient = {
@@ -44,6 +45,8 @@ interface SessionCommandContext {
   resolve: (result: SshRunResult) => void;
   reject: (error: Error) => void;
   finished: boolean;
+  done: Promise<void>;
+  markDone: () => void;
 }
 
 interface SessionState {
@@ -177,6 +180,7 @@ export class NativeSshClient {
     if (session.active === command) {
       session.active = undefined;
     }
+    command.markDone();
     command.resolve(result);
   }
 
@@ -192,6 +196,7 @@ export class NativeSshClient {
     if (session.active === command) {
       session.active = undefined;
     }
+    command.markDone();
     command.reject(error);
   }
 
@@ -456,22 +461,46 @@ export class NativeSshClient {
     options?: RunCommandOptions,
   ): Promise<SshRunHandle> {
     const mode = options?.mode ?? "scripted";
+    const conflictPolicy = options?.conflictPolicy ?? (mode === "scripted" ? "queue" : "preempt");
     const requestId = newId("exec");
-    console.log("[OV:ssh] runCommand:", requestId, "mode=" + mode, "target=" + target.label, "cmd=" + command.slice(0, 100));
+    console.log(
+      "[OV:ssh] runCommand:",
+      requestId,
+      "mode=" + mode,
+      "policy=" + conflictPolicy,
+      "target=" + target.label,
+      "cmd=" + command.slice(0, 100),
+    );
     const marker = `__OV_EXIT_${requestId}__`;
     const markerRegex = new RegExp(`${escapeRegExp(marker)}\\s*(\\d+)`);
 
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       const session = await this.getOrCreateSession(target, credentials);
-      if (session.active && !session.active.finished) {
-        console.warn("[OV:ssh] cancelling previous active command to run new one:", session.active.requestId);
-        this.finishCommand(session, session.active, {
+      while (session.active && !session.active.finished) {
+        const active = session.active;
+        if (conflictPolicy === "queue" && mode === "scripted" && active.mode === "scripted") {
+          console.log("[OV:ssh] queueing scripted command", requestId, "behind", active.requestId);
+          await active.done;
+          continue;
+        }
+        if (conflictPolicy === "queue" && mode === "scripted" && active.mode === "interactive") {
+          throw new Error("SSH shell is busy with an interactive command.");
+        }
+
+        console.warn(
+          "[OV:ssh] preempting active command",
+          active.requestId,
+          "with",
+          requestId,
+          "policy=" + conflictPolicy,
+        );
+        this.finishCommand(session, active, {
           exitCode: 130,
           signal: "SIGINT",
-          stdout: session.active.stdout,
-          stderr: session.active.stderr,
+          stdout: active.stdout,
+          stderr: active.stderr,
         });
-        // Send Ctrl+C to stop the previous command in the shell
+        // Send Ctrl+C to stop the previous command in the shell.
         try {
           await this.writeToShellWithRetry(session.client, "\u0003\n");
           await sleep(100);
@@ -483,6 +512,10 @@ export class NativeSshClient {
       const wait = new Promise<SshRunResult>((resolve, reject) => {
         resolveWait = resolve;
         rejectWait = reject;
+      });
+      let markDone = () => {};
+      const done = new Promise<void>((resolve) => {
+        markDone = resolve;
       });
 
       const commandContext: SessionCommandContext = {
@@ -497,6 +530,8 @@ export class NativeSshClient {
         resolve: (result) => resolveWait?.(result),
         reject: (error) => rejectWait?.(error),
         finished: false,
+        done,
+        markDone,
       };
       session.active = commandContext;
       if (session.cursor > session.lastDeliveredCursor && session.buffer.length > 0) {
@@ -522,6 +557,7 @@ export class NativeSshClient {
           session.active = undefined;
         }
         commandContext.finished = true;
+        commandContext.markDone();
         const dispatchError = error instanceof Error ? error : new Error(String(error));
         if (attempt < 2) {
           await this.resetTargetSession(target.id);

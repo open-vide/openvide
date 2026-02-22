@@ -1,4 +1,5 @@
 import type { CliAdapter, CliStreamEvent } from "../adapterTypes";
+import { sanitizeCodexToolOutput } from "../codexOutputSanitizer";
 
 function escapeShellArg(arg: string): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
@@ -230,13 +231,17 @@ export const codexAdapter: CliAdapter = {
         }
       } else if (itemType === "function_call_output") {
         const output = typeof item["output"] === "string" ? item["output"] : undefined;
+        const cleanedOutput = sanitizeCodexToolOutput(output ?? "");
+        if (!cleanedOutput) {
+          return events;
+        }
         events.push({
           type: "content_block",
           role: "assistant",
           block: {
             type: "tool_result",
             toolId: typeof item["call_id"] === "string" ? item["call_id"] : undefined,
-            result: output ?? "",
+            result: cleanedOutput,
           },
         });
       } else if (itemType === "command_execution" || itemType === "local_shell_call") {

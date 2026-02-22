@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAppStore } from "../state/AppStoreContext";
 import { NativeSshClient } from "../core/ssh/nativeSsh";
@@ -8,6 +9,7 @@ import { RemoteFsBrowserController, RequestSupersededError } from "../core/ssh/r
 import { loadTargetCredentials } from "../state/secureStore";
 import { Icon } from "../components/Icon";
 import { useThemeColors } from "../constants/colors";
+import { cn } from "../lib/utils";
 import type { RootStackParamList } from "../navigation/types";
 
 type Props = NativeStackScreenProps<RootStackParamList, "DirectoryPicker">;
@@ -17,6 +19,7 @@ export function DirectoryPicker({ route, navigation }: Props): JSX.Element {
   const { getTarget } = useAppStore();
   const target = getTarget(targetId);
   const { accent, dimmed, mutedForeground } = useThemeColors();
+  const insets = useSafeAreaInsets();
 
   const [pathStack, setPathStack] = useState<string[]>(initialPath ? [initialPath] : []);
   const [entries, setEntries] = useState<RemoteFileEntry[]>([]);
@@ -32,6 +35,7 @@ export function DirectoryPicker({ route, navigation }: Props): JSX.Element {
   const browserRef = useRef<RemoteFsBrowserController | null>(null);
 
   const currentDir = pathStack[pathStack.length - 1] ?? null;
+  const canSelect = Boolean(currentDir);
 
   const filteredEntries = useMemo(() => {
     if (!searchQuery.trim()) return entries;
@@ -117,27 +121,20 @@ export function DirectoryPicker({ route, navigation }: Props): JSX.Element {
     navigation.setOptions({
       title: "Pick Directory",
       headerRight: () => (
-        <View className="flex-row items-center gap-1">
-          <Pressable
-            className="w-9 h-9 items-center justify-center active:opacity-80"
-            onPress={() => setSearchVisible((v) => !v)}
-          >
-            <Icon name="search" size={18} color={mutedForeground} />
-          </Pressable>
-          <Pressable
-            className="px-3 py-1.5 bg-accent rounded-full active:opacity-80 disabled:opacity-40"
-            disabled={!currentDir}
-            onPress={() => {
-              if (!currentDir) return;
-              navigation.navigate(returnTo ?? "NewSessionSheet", { selectedDirectory: currentDir } as never);
-            }}
-          >
-            <Text className="text-white text-sm font-bold">Select</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          className="w-9 h-9 items-center justify-center active:opacity-80"
+          onPress={() => setSearchVisible((v) => !v)}
+        >
+          <Icon name="search" size={18} color={mutedForeground} />
+        </Pressable>
       ),
     });
-  }, [currentDir, navigation, returnTo, mutedForeground]);
+  }, [navigation, mutedForeground]);
+
+  const handleSelect = useCallback(() => {
+    if (!currentDir) return;
+    navigation.navigate(returnTo ?? "NewSessionSheet", { selectedDirectory: currentDir } as never);
+  }, [currentDir, navigation, returnTo]);
 
   const handleEntryPress = useCallback((entry: RemoteFileEntry) => {
     setPathStack((prev) => [...prev, entry.path]);
@@ -223,41 +220,53 @@ export function DirectoryPicker({ route, navigation }: Props): JSX.Element {
         </Pressable>
       )}
 
-      {showLoadingState && (
-        <View className="items-center py-8">
-          <ActivityIndicator size="small" color={accent} />
-        </View>
-      )}
+      <View className="flex-1">
+        {showLoadingState && (
+          <View className="items-center py-8">
+            <ActivityIndicator size="small" color={accent} />
+          </View>
+        )}
 
-      {error && (
-        <View className="px-4 py-3">
-          <Text className="text-error-bright text-sm">{error}</Text>
-        </View>
-      )}
+        {error && (
+          <View className="px-4 py-3">
+            <Text className="text-error-bright text-sm">{error}</Text>
+          </View>
+        )}
 
-      {!showLoadingState && !error && (
-        <FlatList
-          data={filteredEntries}
-          keyExtractor={(item) => item.path}
-          renderItem={({ item }) => (
-            <Pressable
-              className="flex-row items-center gap-3 px-4 py-3 border-b border-border active:bg-muted"
-              onPress={() => handleEntryPress(item)}
-            >
-              <Icon name="folder" size={18} color={accent} />
-              <Text className="text-foreground text-sm flex-1">{item.name}</Text>
-              <Icon name="chevron-right" size={16} color={dimmed} />
-            </Pressable>
-          )}
-          ListEmptyComponent={
-            <View className="items-center py-8">
-              <Text className="text-dimmed text-sm">
-                {searchQuery ? "No matching directories" : "No subdirectories"}
-              </Text>
-            </View>
-          }
-        />
-      )}
+        {!showLoadingState && !error && (
+          <FlatList
+            data={filteredEntries}
+            keyExtractor={(item) => item.path}
+            renderItem={({ item }) => (
+              <Pressable
+                className="flex-row items-center gap-3 px-4 py-3 border-b border-border active:bg-muted"
+                onPress={() => handleEntryPress(item)}
+              >
+                <Icon name="folder" size={18} color={accent} />
+                <Text className="text-foreground text-sm flex-1">{item.name}</Text>
+                <Icon name="chevron-right" size={16} color={dimmed} />
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              <View className="items-center py-8">
+                <Text className="text-dimmed text-sm">
+                  {searchQuery ? "No matching directories" : "No subdirectories"}
+                </Text>
+              </View>
+            }
+          />
+        )}
+      </View>
+
+      <View className="px-4 pt-3 border-t border-border bg-background" style={{ paddingBottom: insets.bottom + 12 }}>
+        <Pressable
+          className={cn("bg-accent rounded-full py-4 items-center flex-row justify-center gap-2", !canSelect && "opacity-40")}
+          onPress={handleSelect}
+          disabled={!canSelect}
+        >
+          <Text className="text-white font-bold text-base">Select</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

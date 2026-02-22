@@ -272,10 +272,7 @@ export const AiContentBlockView = React.memo(function AiContentBlockView({
     case "command_exec": {
       return (
         <View className="gap-1.5">
-          {/* Command header */}
-          <View className="bg-muted rounded-t-lg border border-border px-3 py-2">
-            <CodeBlock code={`$ ${block.command}`} language="bash" showCopyButton={true} />
-          </View>
+          <CodeBlock code={`$ ${block.command}`} language="bash" showCopyButton={true} />
           {/* Output */}
           {block.output != null && block.output.length > 0 && (
             <TruncatedText text={block.output} maxLines={200}>

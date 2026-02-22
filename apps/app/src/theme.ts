@@ -19,7 +19,7 @@ export const remoteDevTheme = createTheme({
     warning: { light: "#F5A623", dark: "#F4C86E" },
     error: { light: "#E74C3C", dark: "#FF6E5F" },
     info: { light: "#C4704B", dark: "#D4836B" },
-    border: { light: "#E5E2DD", dark: "#3B3733" },
+    border: { light: "#E5E2DD", dark: "#4A4640" },
     ring: { light: "#C4704B", dark: "#D4836B" },
   },
 });

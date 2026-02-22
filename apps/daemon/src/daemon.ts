@@ -7,8 +7,11 @@ import * as sm from "./sessionManager.js";
 
 const PID_FILE = "daemon.pid";
 const LOG_FILE = "daemon.log";
+const MAIN_LOCK_FILE = "daemon.lock";
+const START_LOCK_FILE = "daemon.start.lock";
 const HEARTBEAT_INTERVAL = 30_000; // 30s
 const STALE_THRESHOLD = 60_000; // 60s
+const START_LOCK_STALE_THRESHOLD = 15_000; // 15s
 
 function pidPath(): string {
   return path.join(daemonDir(), PID_FILE);
@@ -16,6 +19,89 @@ function pidPath(): string {
 
 function logPath(): string {
   return path.join(daemonDir(), LOG_FILE);
+}
+
+function mainLockPath(): string {
+  return path.join(daemonDir(), MAIN_LOCK_FILE);
+}
+
+function startLockPath(): string {
+  return path.join(daemonDir(), START_LOCK_FILE);
+}
+
+function readPidFromFile(filePath: string): number | undefined {
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8").trim();
+    const firstLine = raw.split("\n")[0]?.trim();
+    if (!firstLine) return undefined;
+    const pid = parseInt(firstLine, 10);
+    if (!Number.isFinite(pid) || pid <= 0) return undefined;
+    return pid;
+  } catch {
+    return undefined;
+  }
+}
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tryRemoveStaleLock(lockFile: string, staleThresholdMs: number): void {
+  try {
+    const ownerPid = readPidFromFile(lockFile);
+    if (ownerPid && isPidAlive(ownerPid)) {
+      return;
+    }
+    if (ownerPid && !isPidAlive(ownerPid)) {
+      fs.unlinkSync(lockFile);
+      return;
+    }
+    const stat = fs.statSync(lockFile);
+    const ageMs = Date.now() - stat.mtimeMs;
+    if (ageMs < staleThresholdMs) {
+      return;
+    }
+    fs.unlinkSync(lockFile);
+  } catch {
+    // no-op
+  }
+}
+
+function acquireLock(lockFile: string, staleThresholdMs: number): number | undefined {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const fd = fs.openSync(lockFile, "wx");
+      fs.writeFileSync(fd, `${process.pid}\n${Date.now()}\n`, "utf-8");
+      return fd;
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code !== "EEXIST") {
+        logError(`Failed to acquire lock ${lockFile}:`, e.message);
+        return undefined;
+      }
+      tryRemoveStaleLock(lockFile, staleThresholdMs);
+    }
+  }
+  return undefined;
+}
+
+function releaseLock(lockFd: number | undefined, lockFile: string): void {
+  if (lockFd == null) return;
+  try {
+    fs.closeSync(lockFd);
+  } catch {
+    // no-op
+  }
+  try {
+    fs.unlinkSync(lockFile);
+  } catch {
+    // no-op
+  }
 }
 
 // ── Daemon health check ──
@@ -48,24 +134,56 @@ export function isDaemonRunning(): boolean {
 function cleanupStale(): void {
   try { fs.unlinkSync(pidPath()); } catch { /* ignore */ }
   cleanupSocket();
+  tryRemoveStaleLock(mainLockPath(), STALE_THRESHOLD);
+  tryRemoveStaleLock(startLockPath(), START_LOCK_STALE_THRESHOLD);
 }
 
 // ── Auto-start ──
 
 export function ensureDaemon(): void {
-  if (isDaemonRunning()) return;
+  if (isDaemonRunning()) {
+    tryRemoveStaleLock(startLockPath(), START_LOCK_STALE_THRESHOLD);
+    return;
+  }
 
-  log("Daemon not running, auto-starting...");
-  cleanupStale();
-  spawnDaemon();
+  const lockFile = startLockPath();
+  let startupLockFd = acquireLock(lockFile, START_LOCK_STALE_THRESHOLD);
 
-  // Wait briefly for daemon to be ready
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline) {
+  // Another CLI process is already starting the daemon. Wait for it to finish.
+  if (startupLockFd == null) {
+    const waitDeadline = Date.now() + 3500;
+    while (Date.now() < waitDeadline) {
+      if (isDaemonRunning()) return;
+      const waitUntil = Date.now() + 100;
+      while (Date.now() < waitUntil) { /* spin */ }
+    }
+    startupLockFd = acquireLock(lockFile, START_LOCK_STALE_THRESHOLD);
+    if (startupLockFd == null) {
+      if (!isDaemonRunning()) {
+        logError("Unable to acquire daemon startup lock.");
+      }
+      return;
+    }
+  }
+
+  try {
     if (isDaemonRunning()) return;
-    // Busy-wait in small increments (synchronous for CLI simplicity)
-    const waitUntil = Date.now() + 100;
-    while (Date.now() < waitUntil) { /* spin */ }
+
+    log("Daemon not running, auto-starting...");
+    cleanupStale();
+    spawnDaemon();
+
+    // Wait briefly for daemon to be ready
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      if (isDaemonRunning()) return;
+      // Busy-wait in small increments (synchronous for CLI simplicity)
+      const waitUntil = Date.now() + 100;
+      while (Date.now() < waitUntil) { /* spin */ }
+    }
+    logError("Daemon auto-start did not report healthy within 3s");
+  } finally {
+    releaseLock(startupLockFd, lockFile);
   }
 }
 
@@ -98,6 +216,12 @@ export function runDaemonMain(): void {
   const baseDir = daemonDir();
   fs.mkdirSync(baseDir, { recursive: true });
   fs.mkdirSync(path.join(baseDir, "sessions"), { recursive: true });
+  const lockFile = mainLockPath();
+  const mainLockFd = acquireLock(lockFile, STALE_THRESHOLD);
+  if (mainLockFd == null) {
+    log("Another daemon instance already owns the lock, exiting.");
+    process.exit(0);
+  }
 
   // Write PID
   fs.writeFileSync(pidPath(), String(process.pid) + "\n");
@@ -131,6 +255,7 @@ export function runDaemonMain(): void {
     // Cleanup
     try { fs.unlinkSync(pidPath()); } catch { /* ignore */ }
     cleanupSocket();
+    releaseLock(mainLockFd, lockFile);
 
     log("Daemon stopped");
     process.exit(0);

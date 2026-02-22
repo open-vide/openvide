@@ -21,6 +21,7 @@ export interface SessionRecord {
   id: string;
   tool: Tool;
   status: SessionStatus;
+  pendingRemoval?: boolean;
   conversationId?: string;
   workingDirectory: string;
   model?: string;

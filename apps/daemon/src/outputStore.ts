@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
-import { daemonDir } from "./utils.js";
+import { daemonDir, logError } from "./utils.js";
 import type { OutputLine } from "./types.js";
 
 function sessionDir(sessionId: string): string {
@@ -20,7 +20,17 @@ export function ensureSessionDir(sessionId: string): void {
 export function appendOutput(sessionId: string, entry: OutputLine): { lines: number; bytes: number } {
   const line = JSON.stringify(entry) + "\n";
   const p = outputPath(sessionId);
-  fs.appendFileSync(p, line, "utf-8");
+  try {
+    fs.appendFileSync(p, line, "utf-8");
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code === "ENOENT") {
+      // Session output dir may be removed during teardown; drop late writes safely.
+      logError(`Skipping output append for removed session ${sessionId}`);
+      return { lines: 0, bytes: 0 };
+    }
+    throw err;
+  }
   return { lines: 1, bytes: Buffer.byteLength(line, "utf-8") };
 }
 

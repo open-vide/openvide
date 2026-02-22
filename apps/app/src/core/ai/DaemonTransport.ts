@@ -83,25 +83,102 @@ function stripAnsi(text: string): string {
     .replace(/\r/g, "\n");
 }
 
-function parseIpcResponse(stdout: string): Record<string, unknown> {
-  const cleaned = stripAnsi(stdout).trim();
-  // Find the last JSON object in stdout (skip any shell prompt noise)
-  const lines = cleaned.split("\n");
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i]!.trim();
-    if (line.startsWith("{")) {
-      try {
-        return JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
+interface DaemonCommandResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+}
+
+interface DaemonExecOptions {
+  conflictPolicy?: "queue" | "preempt";
+}
+
+function tryParseJsonLine(line: string): Record<string, unknown> | undefined {
+  const trimmed = line.trim();
+  if (!trimmed) return undefined;
+
+  // Fast path: entire line is JSON.
+  try {
+    return JSON.parse(trimmed) as Record<string, unknown>;
+  } catch {
+    // Keep trying.
+  }
+
+  // Shells can prepend/append prompt noise around JSON.
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1)) as Record<string, unknown>;
+    } catch {
+      // Keep trying.
     }
   }
-  throw new Error("No valid JSON response from daemon");
+  return undefined;
+}
+
+function parseIpcResponse(output: DaemonCommandResult): Record<string, unknown> {
+  const combined = [output.stdout, output.stderr]
+    .map((chunk) => stripAnsi(chunk).trim())
+    .filter((chunk) => chunk.length > 0)
+    .join("\n");
+
+  const lines = combined.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const parsed = tryParseJsonLine(lines[i] ?? "");
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const stderrTail = stripAnsi(output.stderr).trim().split("\n").slice(-2).join(" | ");
+  const suffix = stderrTail ? ` (stderr: ${stderrTail})` : "";
+  throw new Error(`No valid JSON response from daemon${suffix}`);
 }
 
 export class DaemonTransport {
+  private static readonly DEFAULT_DAEMON_TIMEOUT_MS = 30000;
+  private static readonly DAEMON_CMD = "openvide-daemon";
+  private static readonly DAEMON_NOT_FOUND_JSON = "{\"ok\":false,\"error\":\"openvide-daemon not found in PATH or common install paths\"}";
+
   constructor(private readonly ssh: NativeSshClient) {}
+
+  private withResolvedDaemonBinary(command: string): string {
+    const trimmed = command.trim();
+    const prefix = `${DaemonTransport.DAEMON_CMD} `;
+    if (!trimmed.startsWith(prefix)) {
+      return trimmed;
+    }
+
+    const args = trimmed.slice(prefix.length);
+    return [
+      "OV_DAEMON_BIN=\"$(command -v openvide-daemon 2>/dev/null || true)\"",
+      "if [ -z \"$OV_DAEMON_BIN\" ]; then",
+      "  for OV_CANDIDATE in \\",
+      "    \"$HOME/.npm-global/bin/openvide-daemon\" \\",
+      "    \"$HOME/.local/bin/openvide-daemon\" \\",
+      "    \"/opt/homebrew/bin/openvide-daemon\" \\",
+      "    \"/usr/local/bin/openvide-daemon\"",
+      "  do",
+      "    if [ -x \"$OV_CANDIDATE\" ]; then",
+      "      OV_DAEMON_BIN=\"$OV_CANDIDATE\"",
+      "      break",
+      "    fi",
+      "  done",
+      "fi",
+      "if [ -z \"$OV_DAEMON_BIN\" ] && [ -d \"$HOME/.nvm/versions/node\" ]; then",
+      "  OV_DAEMON_BIN=\"$(find \"$HOME/.nvm/versions/node\" -type f -path '*/bin/openvide-daemon' 2>/dev/null | sort | tail -n 1)\"",
+      "fi",
+      "if [ -z \"$OV_DAEMON_BIN\" ]; then",
+      `  echo ${escapeShellArg(DaemonTransport.DAEMON_NOT_FOUND_JSON)}`,
+      "  exit 127",
+      "fi",
+      "OV_DAEMON_DIR=\"$(dirname \"$OV_DAEMON_BIN\")\"",
+      "PATH=\"$OV_DAEMON_DIR:$PATH\"",
+      "export PATH",
+      `"$OV_DAEMON_BIN" ${args}`,
+    ].join("\n");
+  }
 
   async createSession(
     target: TargetProfile,
@@ -127,8 +204,8 @@ export class DaemonTransport {
       parts.push("--conversation-id", escapeShellArg(opts.conversationId));
     }
 
-    const stdout = await this.execDaemonCommand(target, credentials, parts.join(" "));
-    const resp = parseIpcResponse(stdout);
+    const daemonOutput = await this.execDaemonCommand(target, credentials, parts.join(" "));
+    const resp = parseIpcResponse(daemonOutput);
     if (!resp["ok"]) {
       throw new Error((resp["error"] as string) ?? "Daemon session create failed");
     }
@@ -151,8 +228,8 @@ export class DaemonTransport {
       "--prompt", escapeShellArg(prompt),
     ].join(" ");
 
-    const stdout = await this.execDaemonCommand(target, credentials, cmd);
-    const resp = parseIpcResponse(stdout);
+    const daemonOutput = await this.execDaemonCommand(target, credentials, cmd);
+    const resp = parseIpcResponse(daemonOutput);
     if (!resp["ok"]) {
       throw new Error((resp["error"] as string) ?? "Daemon send failed");
     }
@@ -170,12 +247,13 @@ export class DaemonTransport {
     onLine: (parsed: DaemonOutputLine) => void,
     signal?: { cancelled: boolean },
   ): Promise<number> {
-    const cmd = [
+    const rawCmd = [
       "openvide-daemon", "session", "stream",
       "--id", escapeShellArg(daemonSessionId),
       "--offset", String(offset),
       "--follow",
     ].join(" ");
+    const cmd = this.withResolvedDaemonBinary(rawCmd);
 
     let lineCount = offset;
     let stdoutBuffer = "";
@@ -221,7 +299,7 @@ export class DaemonTransport {
           }
         },
       },
-      { mode: "scripted" },
+      { mode: "scripted", conflictPolicy: "queue" },
     );
 
     // Wait for turn_end or SSH exit (whichever comes first)
@@ -294,8 +372,8 @@ export class DaemonTransport {
       parts.push("--limit-lines", String(Math.max(1, Math.floor(opts.limitLines))));
     }
 
-    const stdout = await this.execDaemonCommand(target, credentials, parts.join(" "));
-    const resp = parseIpcResponse(stdout);
+    const daemonOutput = await this.execDaemonCommand(target, credentials, parts.join(" "));
+    const resp = parseIpcResponse(daemonOutput);
     if (!resp["ok"]) {
       throw new Error((resp["error"] as string) ?? "Daemon history failed");
     }
@@ -313,8 +391,8 @@ export class DaemonTransport {
       "--id", escapeShellArg(daemonSessionId),
       "--timeout-ms", String(Math.max(1000, Math.floor(timeoutMs))),
     ].join(" ");
-    const stdout = await this.execDaemonCommand(target, credentials, cmd);
-    const resp = parseIpcResponse(stdout);
+    const daemonOutput = await this.execDaemonCommand(target, credentials, cmd);
+    const resp = parseIpcResponse(daemonOutput);
     if (!resp["ok"]) {
       throw new Error((resp["error"] as string) ?? "Daemon wait-idle failed");
     }
@@ -331,8 +409,13 @@ export class DaemonTransport {
       "--id", escapeShellArg(daemonSessionId),
     ].join(" ");
 
-    const stdout = await this.execDaemonCommand(target, credentials, cmd);
-    const resp = parseIpcResponse(stdout);
+    const daemonOutput = await this.execDaemonCommand(
+      target,
+      credentials,
+      cmd,
+      { conflictPolicy: "preempt" },
+    );
+    const resp = parseIpcResponse(daemonOutput);
     if (!resp["ok"]) {
       throw new Error((resp["error"] as string) ?? "Daemon cancel failed");
     }
@@ -347,8 +430,8 @@ export class DaemonTransport {
       "openvide-daemon", "session", "remove",
       "--id", escapeShellArg(daemonSessionId),
     ].join(" ");
-    const stdout = await this.execDaemonCommand(target, credentials, cmd);
-    const resp = parseIpcResponse(stdout);
+    const daemonOutput = await this.execDaemonCommand(target, credentials, cmd);
+    const resp = parseIpcResponse(daemonOutput);
     if (!resp["ok"]) {
       const error = (resp["error"] as string) ?? "";
       if (!error.includes("not found")) {
@@ -367,8 +450,8 @@ export class DaemonTransport {
       "--id", escapeShellArg(daemonSessionId),
     ].join(" ");
 
-    const stdout = await this.execDaemonCommand(target, credentials, cmd);
-    const resp = parseIpcResponse(stdout);
+    const daemonOutput = await this.execDaemonCommand(target, credentials, cmd);
+    const resp = parseIpcResponse(daemonOutput);
     if (!resp["ok"]) {
       throw new Error((resp["error"] as string) ?? "Daemon get session failed");
     }
@@ -380,8 +463,8 @@ export class DaemonTransport {
     credentials: SshCredentials,
   ): Promise<DaemonSessionInfo[]> {
     const cmd = "openvide-daemon session list";
-    const stdout = await this.execDaemonCommand(target, credentials, cmd);
-    const resp = parseIpcResponse(stdout);
+    const daemonOutput = await this.execDaemonCommand(target, credentials, cmd);
+    const resp = parseIpcResponse(daemonOutput);
     if (!resp["ok"]) {
       throw new Error((resp["error"] as string) ?? "Daemon list sessions failed");
     }
@@ -401,8 +484,8 @@ export class DaemonTransport {
       "openvide-daemon", "session", "list-workspace",
       "--cwd", escapeShellArg(cwd),
     ].join(" ");
-    const stdout = await this.execDaemonCommand(target, credentials, cmd);
-    const resp = parseIpcResponse(stdout);
+    const daemonOutput = await this.execDaemonCommand(target, credentials, cmd);
+    const resp = parseIpcResponse(daemonOutput);
     if (!resp["ok"]) {
       throw new Error((resp["error"] as string) ?? "Daemon list workspace sessions failed");
     }
@@ -427,7 +510,7 @@ export class DaemonTransport {
         onStdout: () => {},
         onStderr: () => {},
       },
-      { mode: "scripted" },
+      { mode: "scripted", conflictPolicy: "queue" },
     );
     try {
       const result = await Promise.race([
@@ -447,13 +530,17 @@ export class DaemonTransport {
     target: TargetProfile,
     credentials: SshCredentials,
     command: string,
-  ): Promise<string> {
-    console.log("[OV:daemon] exec:", command.slice(0, 200));
+    options?: DaemonExecOptions,
+  ): Promise<DaemonCommandResult> {
+    const timeoutMs = DaemonTransport.DEFAULT_DAEMON_TIMEOUT_MS;
+    const resolvedCommand = this.withResolvedDaemonBinary(command);
+    const startedAt = Date.now();
+    console.log("[OV:daemon] exec:", command.slice(0, 200), `timeout=${timeoutMs}ms`);
 
     const handle = await this.ssh.runCommand(
       target,
       credentials,
-      command,
+      resolvedCommand,
       {
         onStdout: () => {},
         onStderr: (chunk: string) => {
@@ -462,16 +549,34 @@ export class DaemonTransport {
           }
         },
       },
-      { mode: "scripted" },
+      { mode: "scripted", conflictPolicy: options?.conflictPolicy ?? "queue" },
     );
 
-    const result = await Promise.race([
-      handle.wait,
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("Daemon command timed out")), 30000);
-      }),
-    ]);
-
-    return result.stdout;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const result = await Promise.race([
+        handle.wait,
+        new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => reject(new Error("Daemon command timed out")), timeoutMs);
+        }),
+      ]);
+      console.log(
+        "[OV:daemon] done:",
+        command.slice(0, 80),
+        `elapsed=${Date.now() - startedAt}ms`,
+      );
+      return {
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exitCode: result.exitCode ?? null,
+      };
+    } catch (err) {
+      handle.cancel().catch(() => {});
+      throw err;
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
   }
 }

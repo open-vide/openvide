@@ -139,11 +139,6 @@ export function InputBar({
     }
   };
 
-  // When running with no text typed: show Cancel
-  // When running with text typed: show Send (queues the message)
-  // When idle: show Send
-  const showCancel = isRunning && !hasText && !isListening;
-
   return (
     <View style={{ paddingBottom: Math.max(12, inset) }}>
       <View className="flex-row items-end px-3 gap-2">
@@ -158,7 +153,7 @@ export function InputBar({
               value={text}
               onChangeText={onChangeText}
               placeholder={
-                isRunning && !hasText ? "Running\u2026 type to queue" : placeholder
+                isRunning && !hasText ? "Running\u2026" : placeholder
               }
               placeholderTextColor={dimmed}
               multiline
@@ -167,10 +162,10 @@ export function InputBar({
               accessibilityLabel="Message input"
             />
           )}
-          {/* Attach + Mic / Send buttons inside the text field */}
+          {/* Right-side button inside the text field */}
           {!isListening && (
             <View className="flex-row items-center">
-              {onAttachPress && !hasText && (
+              {onAttachPress && !hasText && !isRunning && (
                 <Pressable
                   className="h-[54px] items-center justify-center pl-1 active:opacity-80"
                   onPress={onAttachPress}
@@ -182,11 +177,23 @@ export function InputBar({
               )}
               <Pressable
                 className="h-[54px] items-center justify-center pl-2 pr-3 active:opacity-80"
-                onPress={hasText ? handleSend : handleMicPress}
+                onPress={
+                  isRunning && !hasText
+                    ? () => onCancel?.()
+                    : hasText
+                      ? handleSend
+                      : handleMicPress
+                }
                 accessibilityRole="button"
-                accessibilityLabel={hasText ? "Send" : "Voice input"}
+                accessibilityLabel={
+                  isRunning && !hasText ? "Stop" : hasText ? "Send" : "Voice input"
+                }
               >
-                {hasText ? (
+                {isRunning && !hasText ? (
+                  <View className="w-9 h-9 rounded-full bg-destructive items-center justify-center">
+                    <Icon name="square" size={14} color="#FFFFFF" />
+                  </View>
+                ) : hasText ? (
                   <View className="w-9 h-9 rounded-full bg-accent items-center justify-center">
                     <Icon name="send" size={18} color="#FFFFFF" />
                   </View>
@@ -198,8 +205,8 @@ export function InputBar({
           )}
         </View>
 
-        {/* External button: only for cancel (running) or voice-listening stop */}
-        {isListening ? (
+        {/* External button: only for voice-listening stop */}
+        {isListening && (
           <Pressable
             className="bg-foreground w-[54px] h-[54px] rounded-full items-center justify-center active:opacity-80"
             onPress={handleMicPress}
@@ -210,16 +217,7 @@ export function InputBar({
               <Icon name="mic" size={20} color="#FFFFFF" />
             </Animated.View>
           </Pressable>
-        ) : showCancel ? (
-          <Pressable
-            className="bg-destructive w-[54px] h-[54px] rounded-full items-center justify-center active:opacity-80"
-            onPress={() => onCancel?.()}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-          >
-            <Icon name="x" size={20} color="#FFFFFF" />
-          </Pressable>
-        ) : null}
+        )}
       </View>
     </View>
   );

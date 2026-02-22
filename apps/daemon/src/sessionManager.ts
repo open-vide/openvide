@@ -17,7 +17,12 @@ export function init(): void {
   state = loadState();
 
   // Mark any previously-running sessions as interrupted
-  for (const session of Object.values(state.sessions)) {
+  for (const [id, session] of Object.entries(state.sessions)) {
+    if (session.pendingRemoval) {
+      removeSessionDir(id);
+      delete state.sessions[id];
+      continue;
+    }
     if (session.status === "running") {
       session.status = "interrupted";
       session.pid = undefined;
@@ -76,7 +81,7 @@ export function getSession(id: string): SessionRecord | undefined {
 }
 
 export function listSessions(): SessionRecord[] {
-  return Object.values(state.sessions);
+  return Object.values(state.sessions).filter((session) => !session.pendingRemoval);
 }
 
 export function removeSession(id: string): boolean {
@@ -85,7 +90,19 @@ export function removeSession(id: string): boolean {
 
   // Kill process if running
   if (session.status === "running") {
+    session.pendingRemoval = true;
+    session.updatedAt = nowISO();
+    persist();
     cancelSession(id);
+    if (!runningProcesses.has(id)) {
+      removeSessionDir(id);
+      delete state.sessions[id];
+      persist();
+      log(`Removed session ${id}`);
+      return true;
+    }
+    log(`Marked session ${id} for removal after process exit`);
+    return true;
   }
 
   removeSessionDir(id);
@@ -102,6 +119,9 @@ export function sendTurn(id: string, prompt: string): IpcResponse {
   const session = state.sessions[id];
   if (!session) {
     return { ok: false, error: `Session ${id} not found` };
+  }
+  if (session.pendingRemoval) {
+    return { ok: false, error: `Session ${id} is being removed` };
   }
 
   if (session.status === "running") {
@@ -133,6 +153,14 @@ export function sendTurn(id: string, prompt: string): IpcResponse {
     (result) => {
       runningProcesses.delete(id);
       session.pid = undefined;
+
+      if (session.pendingRemoval) {
+        removeSessionDir(id);
+        delete state.sessions[id];
+        persist();
+        log(`Removed session ${id} after process exit`);
+        return;
+      }
 
       if (session.lastTurn) {
         session.lastTurn.endedAt = nowISO();

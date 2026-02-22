@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActionSheetIOS, Alert, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, Text, View } from "react-native";
+import { ActionSheetIOS, Alert, Animated, FlatList, KeyboardAvoidingView, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, Text, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppStore } from "../state/AppStoreContext";
@@ -168,6 +168,25 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
     setMenuMessage(null);
   }, []);
 
+  const flatListRef = useRef<FlatList>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const scrollButtonOpacity = useRef(new Animated.Value(0)).current;
+
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetY = e.nativeEvent.contentOffset.y;
+    const shouldShow = offsetY > 300;
+    setShowScrollButton(shouldShow);
+    Animated.timing(scrollButtonOpacity, {
+      toValue: shouldShow ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [scrollButtonOpacity]);
+
+  const scrollToBottom = useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
   const messages = session?.messages ?? [];
   const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
 
@@ -214,24 +233,43 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
         </View>
       )}
 
-      <FlatList
-        data={reversedMessages}
-        keyExtractor={(item) => item.id}
-        inverted
-        style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, gap: 20 }}
-        renderItem={({ item }) => (
-          <AiMessageBubble
-            message={item}
-            onMenuPress={handleMenuPress}
-            onSendResponse={handleSend}
-            showToolDetails={effectiveShowToolDetails}
-          />
+      <View style={{ flex: 1 }}>
+        <FlatList
+          ref={flatListRef}
+          data={reversedMessages}
+          keyExtractor={(item) => item.id}
+          inverted
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 16, gap: 20 }}
+          renderItem={({ item }) => (
+            <AiMessageBubble
+              message={item}
+              onMenuPress={handleMenuPress}
+              onSendResponse={handleSend}
+              showToolDetails={effectiveShowToolDetails}
+            />
+          )}
+          onScroll={handleScroll}
+          scrollEventThrottle={100}
+          windowSize={10}
+          maxToRenderPerBatch={8}
+          removeClippedSubviews
+        />
+        {showScrollButton && (
+          <Animated.View
+            style={{ opacity: scrollButtonOpacity }}
+            className="absolute bottom-3 self-center"
+            pointerEvents="box-none"
+          >
+            <Pressable
+              onPress={scrollToBottom}
+              className="w-9 h-9 rounded-full bg-muted border border-border items-center justify-center active:opacity-80 shadow-sm"
+            >
+              <Icon name="arrow-down" size={18} />
+            </Pressable>
+          </Animated.View>
         )}
-        windowSize={10}
-        maxToRenderPerBatch={8}
-        removeClippedSubviews
-      />
+      </View>
 
       <QuickActions
         sessionStatus={session.status}

@@ -78,11 +78,11 @@ type GlassVariant = "card" | "surface" | "pill" | "sheet" | "fab" | "nav";
 const VARIANT_CLASSES: Record<GlassVariant, { fallback: string; glass: string }> = {
   card: {
     fallback: "bg-card rounded-2xl border border-border overflow-hidden",
-    glass: "rounded-2xl overflow-hidden",
+    glass: "rounded-2xl border border-border overflow-hidden",
   },
   surface: {
     fallback: "bg-card border-t border-border",
-    glass: "border-t border-border/20",
+    glass: "border-t border-border",
   },
   pill: {
     fallback: "",
@@ -90,11 +90,11 @@ const VARIANT_CLASSES: Record<GlassVariant, { fallback: string; glass: string }>
   },
   sheet: {
     fallback: "bg-card rounded-t-[24px] border-t border-border",
-    glass: "rounded-t-[24px]",
+    glass: "rounded-t-[24px] border-t border-border",
   },
   fab: {
     fallback: "bg-accent rounded-full shadow-lg",
-    glass: "rounded-full shadow-lg",
+    glass: "rounded-full shadow-lg border border-border",
   },
   nav: {
     fallback: "",

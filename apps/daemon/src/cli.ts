@@ -53,6 +53,11 @@ function printJson(obj: unknown): void {
   console.log(JSON.stringify(obj));
 }
 
+function failJson(error: string): never {
+  printJson({ ok: false, error });
+  process.exit(1);
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.length === 0) usage();
@@ -143,8 +148,7 @@ async function main(): Promise<void> {
         const tool = flags.get("tool") as Tool | undefined;
         const cwd = flags.get("cwd");
         if (!tool || !cwd) {
-          console.error("Error: --tool and --cwd are required");
-          process.exit(1);
+          failJson("--tool and --cwd are required");
         }
         ensureDaemon();
         const res = await sendCommand({
@@ -163,8 +167,7 @@ async function main(): Promise<void> {
         const id = flags.get("id");
         const prompt = flags.get("prompt");
         if (!id || !prompt) {
-          console.error("Error: --id and --prompt are required");
-          process.exit(1);
+          failJson("--id and --prompt are required");
         }
         ensureDaemon();
         const res = await sendCommand({ cmd: "session.send", id, prompt });
@@ -175,8 +178,7 @@ async function main(): Promise<void> {
       case "stream": {
         const id = flags.get("id");
         if (!id) {
-          console.error("Error: --id is required");
-          process.exit(1);
+          failJson("--id is required");
         }
         const offset = parseInt(flags.get("offset") ?? "0", 10);
         const follow = flags.has("follow");
@@ -214,8 +216,7 @@ async function main(): Promise<void> {
       case "cancel": {
         const id = flags.get("id");
         if (!id) {
-          console.error("Error: --id is required");
-          process.exit(1);
+          failJson("--id is required");
         }
         ensureDaemon();
         const res = await sendCommand({ cmd: "session.cancel", id });
@@ -234,12 +235,10 @@ async function main(): Promise<void> {
         const cwd = flags.get("cwd");
         const tool = flags.get("tool");
         if (!cwd) {
-          console.error("Error: --cwd is required");
-          process.exit(1);
+          failJson("--cwd is required");
         }
         if (tool && tool !== "claude" && tool !== "codex" && tool !== "all") {
-          console.error("Error: --tool must be one of claude|codex|all");
-          process.exit(1);
+          failJson("--tool must be one of claude|codex|all");
         }
         ensureDaemon();
         const res = await sendCommand({
@@ -254,8 +253,7 @@ async function main(): Promise<void> {
       case "list-workspace": {
         const cwd = flags.get("cwd");
         if (!cwd) {
-          console.error("Error: --cwd is required");
-          process.exit(1);
+          failJson("--cwd is required");
         }
         ensureDaemon();
         const res = await sendCommand({
@@ -269,8 +267,7 @@ async function main(): Promise<void> {
       case "get": {
         const id = flags.get("id");
         if (!id) {
-          console.error("Error: --id is required");
-          process.exit(1);
+          failJson("--id is required");
         }
         ensureDaemon();
         const res = await sendCommand({ cmd: "session.get", id });
@@ -287,12 +284,10 @@ async function main(): Promise<void> {
         const limitLines = limitRaw ? parseInt(limitRaw, 10) : undefined;
 
         if (!id && (!tool || !resumeId)) {
-          console.error("Error: provide --id or (--tool and --resume-id)");
-          process.exit(1);
+          failJson("provide --id or (--tool and --resume-id)");
         }
         if (tool && tool !== "claude" && tool !== "codex") {
-          console.error("Error: --tool must be claude or codex");
-          process.exit(1);
+          failJson("--tool must be claude or codex");
         }
 
         ensureDaemon();
@@ -311,8 +306,7 @@ async function main(): Promise<void> {
       case "wait-idle": {
         const id = flags.get("id");
         if (!id) {
-          console.error("Error: --id is required");
-          process.exit(1);
+          failJson("--id is required");
         }
         const timeoutRaw = flags.get("timeout-ms");
         const timeoutMs = timeoutRaw ? parseInt(timeoutRaw, 10) : undefined;
@@ -325,8 +319,7 @@ async function main(): Promise<void> {
       case "remove": {
         const id = flags.get("id");
         if (!id) {
-          console.error("Error: --id is required");
-          process.exit(1);
+          failJson("--id is required");
         }
         ensureDaemon();
         const res = await sendCommand({ cmd: "session.remove", id });
@@ -335,16 +328,16 @@ async function main(): Promise<void> {
       }
 
       default:
-        console.error(`Unknown session subcommand: ${sub}`);
-        usage();
+        failJson(`Unknown session subcommand: ${sub}`);
     }
   }
 
-  console.error(`Unknown command: ${command}`);
-  usage();
+  failJson(`Unknown command: ${command}`);
 }
 
-main().catch((err) => {
-  console.error(JSON.stringify({ ok: false, error: err.message }));
+main().catch((err: unknown) => {
+  const message = err instanceof Error ? err.message : String(err);
+  // Emit machine-readable error JSON to stdout so app-side parsers can always consume it.
+  printJson({ ok: false, error: message });
   process.exit(1);
 });
