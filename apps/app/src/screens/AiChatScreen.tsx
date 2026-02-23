@@ -7,10 +7,13 @@ import { AiMessageBubble } from "../components/AiMessageBubble";
 import { InputBar } from "../components/InputBar";
 import { QuickActions } from "../components/QuickActions";
 import { MessageMenu } from "../components/MessageMenu";
+import { ChatToolbar } from "../components/ChatToolbar";
+import { ModelPickerSheet } from "../components/ModelPickerSheet";
 import { ProviderIcon } from "../components/ProviderIcon";
 import { Icon } from "../components/Icon";
 import { GlassContainer } from "../components/GlassContainer";
 import { useVoiceInput } from "../core/useVoiceInput";
+import { getModesForTool, getDefaultMode } from "../core/modeOptions";
 import type { AiMessage, AiSession } from "../core/types";
 import type { MainStackParamList } from "../navigation/types";
 
@@ -36,6 +39,8 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
     sendAiPrompt,
     cancelAiTurn,
     subscribeAiSession,
+    updateSessionModel,
+    updateSessionMode,
     targets,
     speechLanguage,
     showToolDetails,
@@ -45,6 +50,7 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
   const [session, setSession] = useState<AiSession | undefined>(() => getAiSession(sessionId));
   const [menuMessage, setMenuMessage] = useState<AiMessage | null>(null);
   const [sessionMenuVisible, setSessionMenuVisible] = useState(false);
+  const [modelPickerVisible, setModelPickerVisible] = useState(false);
   const [inputText, setInputText] = useState(initialPrompt ?? "");
   const textBeforeVoiceRef = useRef("");
 
@@ -77,6 +83,18 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
       setSession(s);
     }
   }, [sessionId, getAiSession]);
+
+  const handleModeChange = useCallback((mode: string) => {
+    if (session) {
+      updateSessionMode(session.id, mode);
+    }
+  }, [session, updateSessionMode]);
+
+  const handleModelSelect = useCallback((model: string) => {
+    if (session) {
+      updateSessionModel(session.id, model);
+    }
+  }, [session, updateSessionModel]);
 
   const handleSessionMenu = useCallback(() => {
     if (!session) return;
@@ -277,6 +295,14 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
         onAction={handleSend}
       />
 
+      <ChatToolbar
+        tool={session.tool}
+        mode={session.mode ?? getDefaultMode(session.tool)}
+        onModeChange={handleModeChange}
+        model={session.model}
+        onModelPress={() => setModelPickerVisible(true)}
+      />
+
       <InputBar
         placeholder={`Message ${TOOL_LABELS[session.tool] ?? session.tool}...`}
         isRunning={isRunning}
@@ -294,6 +320,14 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
         message={menuMessage}
         visible={menuMessage != null}
         onClose={handleMenuClose}
+      />
+
+      <ModelPickerSheet
+        visible={modelPickerVisible}
+        onClose={() => setModelPickerVisible(false)}
+        tool={session.tool}
+        selectedModelId={session.model}
+        onSelectModel={handleModelSelect}
       />
 
       {/* Android session menu modal */}

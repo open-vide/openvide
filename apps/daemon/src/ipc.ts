@@ -112,7 +112,10 @@ async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
       if (!id || !prompt) {
         return { ok: false, error: "Missing required: id, prompt" };
       }
-      return sm.sendTurn(id, prompt);
+      const turnOpts: { mode?: string; model?: string } = {};
+      if (typeof req.mode === "string") turnOpts.mode = req.mode;
+      if (typeof req.model === "string") turnOpts.model = req.model;
+      return sm.sendTurn(id, prompt, turnOpts);
     }
 
     case "session.cancel": {

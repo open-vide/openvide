@@ -203,6 +203,7 @@ export interface AiSession {
   conversationId?: string;
   workingDirectory?: string;
   model?: string;
+  mode?: string;
   showToolDetails?: boolean;
   totalInputTokens?: number;
   totalOutputTokens?: number;

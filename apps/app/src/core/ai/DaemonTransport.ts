@@ -221,12 +221,20 @@ export class DaemonTransport {
     credentials: SshCredentials,
     daemonSessionId: string,
     prompt: string,
+    options?: { mode?: string; model?: string },
   ): Promise<void> {
-    const cmd = [
+    const parts = [
       "openvide-daemon", "session", "send",
       "--id", escapeShellArg(daemonSessionId),
       "--prompt", escapeShellArg(prompt),
-    ].join(" ");
+    ];
+    if (options?.mode) {
+      parts.push("--mode", escapeShellArg(options.mode));
+    }
+    if (options?.model) {
+      parts.push("--model", escapeShellArg(options.model));
+    }
+    const cmd = parts.join(" ");
 
     const daemonOutput = await this.execDaemonCommand(target, credentials, cmd);
     const resp = parseIpcResponse(daemonOutput);

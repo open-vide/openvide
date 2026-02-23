@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { PersistedState } from "../core/types";
 
 const STORAGE_KEY = "open-vide/state";
-const CURRENT_VERSION = 5;
+const CURRENT_VERSION = 6;
 
 const EMPTY_STATE: PersistedState = {
   version: CURRENT_VERSION,
@@ -61,6 +61,11 @@ function migrate(state: Record<string, unknown>): PersistedState {
     state["showToolDetails"] = typeof oldValue === "boolean" ? !oldValue : true;
     delete state["autoAcceptTools"];
     state["version"] = 5;
+  }
+
+  // v5 → v6: add session.mode (optional field, no migration needed)
+  if (version < 6) {
+    state["version"] = 6;
   }
 
   return {

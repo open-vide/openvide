@@ -132,6 +132,7 @@ export interface BuildCommandOpts {
   prompt: string;
   conversationId?: string;
   model?: string;
+  mode?: string;
   autoAccept?: boolean;
   messages?: { role: string; text: string }[];
 }

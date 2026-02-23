@@ -115,7 +115,7 @@ export function removeSession(id: string): boolean {
 
 // ── Turn execution ──
 
-export function sendTurn(id: string, prompt: string): IpcResponse {
+export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string; model?: string }): IpcResponse {
   const session = state.sessions[id];
   if (!session) {
     return { ok: false, error: `Session ${id} not found` };
@@ -141,9 +141,13 @@ export function sendTurn(id: string, prompt: string): IpcResponse {
     startedAt: nowISO(),
   };
 
+  // Apply per-turn model override if provided
+  const effectiveModel = turnOpts?.model ?? session.model;
+
   const proc = spawnTurn(
     session,
     prompt,
+    { mode: turnOpts?.mode, model: effectiveModel },
     (lines, bytes) => {
       session.outputLines += lines;
       session.outputBytes += bytes;
