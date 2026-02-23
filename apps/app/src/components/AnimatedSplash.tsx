@@ -1,11 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import * as SplashScreen from "expo-splash-screen";
+import Constants from "expo-constants";
 import LottieView from "lottie-react-native";
+
+// Both must be statically require()'d so Metro can bundle them.
+// The correct one is selected at runtime based on APP_VARIANT.
+const splashAnimations: Record<string, any> = {
+  production: require("../../variants/production/splash-animation.json"),
+  development: require("../../variants/development/splash-animation.json"),
+};
 
 SplashScreen.preventAutoHideAsync();
 
-const SPLASH_BG = "#1E1E1E";
+const APP_VARIANT = Constants.expoConfig?.extra?.appVariant ?? "production";
+const SPLASH_BG = APP_VARIANT === "development" ? "#FFFFFF" : "#1E1E1E";
 const SAFETY_TIMEOUT = 6000;
 const MIN_DISPLAY_MS = 1800;
 const FADE_OUT_MS = 300;
@@ -71,7 +80,7 @@ export function AnimatedSplash({ children }: Props): JSX.Element {
         >
           {animationStarted && (
             <LottieView
-              source={require("../../assets/splash-animation.json")}
+              source={splashAnimations[APP_VARIANT]}
               autoPlay
               loop={false}
               speed={2}
@@ -91,8 +100,11 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: SPLASH_BG,
+    alignItems: "center",
+    justifyContent: "center",
   },
   lottie: {
-    flex: 1,
+    width: 290,
+    height: 290,
   },
 });

@@ -1,32 +1,62 @@
 import { ExpoConfig, ConfigContext } from "expo/config";
+import * as path from "path";
+import * as fs from "fs";
+
+interface VariantConfig {
+  displayName: string;
+  iosBundleIdentifier: string;
+  androidPackage: string;
+  scheme: string;
+  splashBackgroundColor: string;
+}
 
 export default ({ config }: ConfigContext): ExpoConfig => {
-  const iosBundleIdentifier = process.env.APP_IOS_BUNDLE_IDENTIFIER;
-  const androidPackage = process.env.APP_ANDROID_PACKAGE;
+  const appVariant = process.env.APP_VARIANT ?? "production";
   const developmentTeam = process.env.APP_DEVELOPMENT_TEAM;
 
-  if (!iosBundleIdentifier || !androidPackage) {
+  // Load variant-specific config
+  const variantDir = path.join(__dirname, "variants", appVariant);
+  const variantConfigPath = path.join(variantDir, "config.json");
+
+  if (!fs.existsSync(variantConfigPath)) {
     throw new Error(
-      "Missing required env vars: APP_IOS_BUNDLE_IDENTIFIER, APP_ANDROID_PACKAGE. " +
-      "Copy .env.example to .env and fill in your values."
+      `Missing variant config: ${variantConfigPath}\n` +
+      `APP_VARIANT="${appVariant}" — expected a config.json in variants/${appVariant}/`
     );
   }
 
+  const variant: VariantConfig = JSON.parse(
+    fs.readFileSync(variantConfigPath, "utf8")
+  );
+
   return {
+    // Keep name constant — Xcode project/target/scheme stays "OpenVide"
+    // (withNmsshFork hardcodes target 'OpenVide' in Podfile patching)
     name: "Open Vide",
     slug: "open-vide",
     version: "0.1.0",
     orientation: "portrait",
-    icon: "./assets/icon.png",
+    icon: `./variants/${appVariant}/icon.png`,
+    scheme: variant.scheme,
     userInterfaceStyle: "automatic",
     splash: {
-      image: "./assets/splash.png",
-      backgroundColor: "#1E1E1E",
+      image: `./variants/${appVariant}/splash.png`,
+      backgroundColor: variant.splashBackgroundColor,
       resizeMode: "contain",
     },
     assetBundlePatterns: ["**/*"],
+    extra: {
+      appVariant,
+    },
     plugins: [
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          image: `./variants/${appVariant}/splash.png`,
+          imageWidth: 290,
+          backgroundColor: variant.splashBackgroundColor,
+        },
+      ],
       [
         "expo-notifications",
         {
@@ -36,6 +66,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       "./plugins/withLocalNotificationsOnly",
       "./plugins/withNmsshFork",
       ["./plugins/withDevelopmentTeam", { teamId: developmentTeam }],
+      ["./plugins/withAppDisplayName", { displayName: variant.displayName }],
       [
         "@jamsch/expo-speech-recognition",
         {
@@ -61,8 +92,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ],
     ios: {
       supportsTablet: true,
-      bundleIdentifier: iosBundleIdentifier,
+      bundleIdentifier: variant.iosBundleIdentifier,
       infoPlist: {
+        CFBundleDisplayName: variant.displayName,
         NSLocalNetworkUsageDescription:
           "This app connects to SSH servers on your local network to manage remote development tools.",
         NSBonjourServices: ["_ssh._tcp"],
@@ -72,7 +104,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       adaptiveIcon: {
         backgroundColor: "#0b1220",
       },
-      package: androidPackage,
+      package: variant.androidPackage,
     },
   };
 };

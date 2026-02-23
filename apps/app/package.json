@@ -5,11 +5,17 @@
   "main": "index.js",
   "scripts": {
     "start": "expo start",
+    "start:dev": "APP_VARIANT=development expo start",
     "android": "expo run:android",
+    "android:dev": "APP_VARIANT=development expo run:android",
     "ios": "node scripts/cleanup-stale-ios-projects.js && expo run:ios --scheme OpenVide --no-install",
     "ios:install": "node scripts/cleanup-stale-ios-projects.js && expo run:ios --scheme OpenVide",
+    "ios:dev": "APP_VARIANT=development node scripts/cleanup-stale-ios-projects.js && APP_VARIANT=development expo run:ios --scheme OpenVide --no-install",
+    "ios:dev:install": "APP_VARIANT=development node scripts/cleanup-stale-ios-projects.js && APP_VARIANT=development expo run:ios --scheme OpenVide",
     "prebuild": "expo prebuild && node scripts/strip-push-entitlement.js",
     "prebuild:clean": "expo prebuild --clean && node scripts/strip-push-entitlement.js",
+    "prebuild:dev": "APP_VARIANT=development expo prebuild && node scripts/strip-push-entitlement.js",
+    "prebuild:dev:clean": "APP_VARIANT=development expo prebuild --clean && node scripts/strip-push-entitlement.js",
     "web": "expo start --web",
     "check": "tsc --noEmit",
     "dev": "expo start"
