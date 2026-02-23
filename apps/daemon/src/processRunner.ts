@@ -54,13 +54,15 @@ function augmentedEnv(): NodeJS.ProcessEnv {
 export function spawnTurn(
   session: SessionRecord,
   prompt: string,
+  turnOpts: { mode?: string; model?: string },
   onOutputDelta: (lines: number, bytes: number) => void,
   onFinished: (result: RunResult) => void,
 ): RunningProcess {
   const command = buildCommand(session.tool, {
     prompt,
     conversationId: session.conversationId,
-    model: session.model,
+    model: turnOpts.model ?? session.model,
+    mode: turnOpts.mode,
     autoAccept: session.autoAccept,
   });
 

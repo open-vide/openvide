@@ -170,7 +170,13 @@ async function main(): Promise<void> {
           failJson("--id and --prompt are required");
         }
         ensureDaemon();
-        const res = await sendCommand({ cmd: "session.send", id, prompt });
+        const res = await sendCommand({
+          cmd: "session.send",
+          id,
+          prompt,
+          mode: flags.get("mode"),
+          model: flags.get("model"),
+        });
         printJson(res);
         return;
       }

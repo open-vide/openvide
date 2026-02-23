@@ -233,6 +233,7 @@ interface AppStoreContextShape {
   deleteSession: (sessionId: string) => Promise<void>;
   clearSessions: () => Promise<void>;
   updateSessionModel: (sessionId: string, model: string) => void;
+  updateSessionMode: (sessionId: string, mode: string) => void;
   compactSessionMessages: (sessionId: string) => void;
   clearSessionMessages: (sessionId: string) => void;
   importDaemonSessions: (targetId: string) => Promise<AiSession[]>;
@@ -1195,6 +1196,16 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     }));
   }, [commit]);
 
+  const updateSessionMode = useCallback((sessionId: string, mode: string): void => {
+    sessionEngineRef.current!.updateMode(sessionId, mode);
+    commit((prev) => ({
+      ...prev,
+      sessions: prev.sessions.map((s) =>
+        s.id === sessionId ? { ...s, mode, updatedAt: new Date().toISOString() } : s,
+      ),
+    }));
+  }, [commit]);
+
   const compactSessionMessages = useCallback((sessionId: string): void => {
     sessionEngineRef.current!.compactSession(sessionId);
     commit((prev) => ({
@@ -1422,6 +1433,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     deleteSession,
     clearSessions,
     updateSessionModel,
+    updateSessionMode,
     compactSessionMessages,
     clearSessionMessages,
     importDaemonSessions,
@@ -1488,6 +1500,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     deleteSession,
     clearSessions,
     updateSessionModel,
+    updateSessionMode,
     compactSessionMessages,
     clearSessionMessages,
     importDaemonSessions,

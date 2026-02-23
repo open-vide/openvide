@@ -452,6 +452,15 @@ export class SessionEngine {
     }
   }
 
+  updateMode(sessionId: string, mode: string): void {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      session.mode = mode;
+      session.updatedAt = new Date().toISOString();
+      console.log("[OV:engine] updateMode:", sessionId, "mode=" + mode);
+    }
+  }
+
   compactSession(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (session) {
@@ -849,8 +858,9 @@ export class SessionEngine {
 
       // Step 2: Send the prompt to the daemon
       console.log("[OV:engine] sending turn to daemon:", session.daemonSessionId);
+      const turnOpts = { mode: session.mode, model: session.model };
       try {
-        await this.transport.sendTurn(target, credentials, session.daemonSessionId, prompt);
+        await this.transport.sendTurn(target, credentials, session.daemonSessionId, prompt, turnOpts);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (!message.includes("already running")) {
@@ -873,7 +883,7 @@ export class SessionEngine {
         if (wait.timedOut) {
           throw new Error("Session is still running remotely. Try again when it becomes idle.");
         }
-        await this.transport.sendTurn(target, credentials, session.daemonSessionId, prompt);
+        await this.transport.sendTurn(target, credentials, session.daemonSessionId, prompt, turnOpts);
       }
 
       // Step 3: Register cancel handle

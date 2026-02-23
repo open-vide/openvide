@@ -7,9 +7,18 @@ function buildClaudeCommand(opts: BuildCommandOpts): string {
     "-p", escapeShellArg(opts.prompt),
     "--output-format", "stream-json",
     "--verbose",
-    // Always skip permissions — daemon is non-interactive, can't prompt user
-    "--dangerously-skip-permissions",
   ];
+
+  // Mode determines permission/tool flags
+  if (opts.mode === "plan") {
+    parts.push("--permission-mode", "plan", "--allow-dangerously-skip-permissions");
+  } else if (opts.mode === "chat") {
+    parts.push("--tools", '""', "--dangerously-skip-permissions");
+  } else {
+    // Default "code" mode — full tool access, auto-accept
+    parts.push("--dangerously-skip-permissions");
+  }
+
   if (opts.conversationId) {
     parts.push("--resume", escapeShellArg(opts.conversationId));
   }
@@ -22,18 +31,27 @@ function buildClaudeCommand(opts: BuildCommandOpts): string {
 function buildCodexCommand(opts: BuildCommandOpts): string {
   const envPrefix = opts.model ? `OPENAI_MODEL=${escapeShellArg(opts.model)} ` : "";
 
+  let prompt = opts.prompt;
+  if (opts.mode === "plan") {
+    prompt = "You are in PLAN mode. Analyze the codebase and describe what changes you would make, but do NOT apply any changes.\n\n" + prompt;
+  }
+
   if (opts.conversationId) {
+    // Flags before `--`, then positional args after to prevent prompt text
+    // being parsed as flags by Codex's strict argument parser.
     const parts = [
-      "codex", "exec", "resume", escapeShellArg(opts.conversationId),
-      escapeShellArg(opts.prompt),
+      "codex", "exec",
       "--json", "--full-auto", "--skip-git-repo-check",
+      "--", "resume", escapeShellArg(opts.conversationId),
+      escapeShellArg(prompt),
     ];
     return envPrefix + parts.join(" ");
   }
 
   const parts = [
-    "codex", "exec", escapeShellArg(opts.prompt),
+    "codex", "exec",
     "--json", "--full-auto", "--skip-git-repo-check",
+    "--", escapeShellArg(prompt),
   ];
   return envPrefix + parts.join(" ");
 }
