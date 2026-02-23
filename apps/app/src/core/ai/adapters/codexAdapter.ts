@@ -106,6 +106,10 @@ export const codexAdapter: CliAdapter = {
         // agent_message: text is a direct field
         const directText = typeof item["text"] === "string" ? item["text"] : undefined;
         if (directText) {
+          // Skip <turn_aborted> messages — the app handles cancel status separately
+          if (directText.includes("<turn_aborted>")) {
+            return events;
+          }
           events.push({
             type: "content_block",
             role: "assistant",
@@ -120,6 +124,7 @@ export const codexAdapter: CliAdapter = {
           for (const block of content) {
             if (typeof block["type"] === "string" && (block["type"] === "output_text" || block["type"] === "text")) {
               const text = typeof block["text"] === "string" ? block["text"] : "";
+              if (text.includes("<turn_aborted>")) continue;
               events.push({
                 type: "content_block",
                 role: "assistant",
