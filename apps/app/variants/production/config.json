@@ -2,5 +2,6 @@
   "displayName": "Open Vide",
   "iosBundleIdentifier": "com.mrirony.openvide",
   "androidPackage": "com.mr_irony.openvide",
-  "scheme": "openvide"
+  "scheme": "openvide",
+  "splashBackgroundColor": "#1E1E1E"
 }

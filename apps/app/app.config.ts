@@ -7,6 +7,7 @@ interface VariantConfig {
   iosBundleIdentifier: string;
   androidPackage: string;
   scheme: string;
+  splashBackgroundColor: string;
 }
 
 export default ({ config }: ConfigContext): ExpoConfig => {
@@ -40,7 +41,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     userInterfaceStyle: "automatic",
     splash: {
       image: `./variants/${appVariant}/splash.png`,
-      backgroundColor: "#1E1E1E",
+      backgroundColor: variant.splashBackgroundColor,
       resizeMode: "contain",
     },
     assetBundlePatterns: ["**/*"],
@@ -52,8 +53,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         "expo-splash-screen",
         {
           image: `./variants/${appVariant}/splash.png`,
-          backgroundColor: "#1E1E1E",
-          resizeMode: "contain",
+          imageWidth: 290,
+          backgroundColor: variant.splashBackgroundColor,
         },
       ],
       [

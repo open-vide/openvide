@@ -7,13 +7,14 @@ import LottieView from "lottie-react-native";
 // Both must be statically require()'d so Metro can bundle them.
 // The correct one is selected at runtime based on APP_VARIANT.
 const splashAnimations: Record<string, any> = {
-  production: require("../../../variants/production/splash-animation.json"),
-  development: require("../../../variants/development/splash-animation.json"),
+  production: require("../../variants/production/splash-animation.json"),
+  development: require("../../variants/development/splash-animation.json"),
 };
 
 SplashScreen.preventAutoHideAsync();
 
-const SPLASH_BG = "#1E1E1E";
+const APP_VARIANT = Constants.expoConfig?.extra?.appVariant ?? "production";
+const SPLASH_BG = APP_VARIANT === "development" ? "#FFFFFF" : "#1E1E1E";
 const SAFETY_TIMEOUT = 6000;
 const MIN_DISPLAY_MS = 1800;
 const FADE_OUT_MS = 300;
