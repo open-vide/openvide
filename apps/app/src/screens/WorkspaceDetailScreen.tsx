@@ -213,6 +213,23 @@ export function WorkspaceDetailScreen({ route, navigation }: Props): JSX.Element
     }
   }, [refreshWorkspaceChats]);
 
+  const handleDeleteWorkspaceChat = useCallback((chat: WorkspaceChatInfo) => {
+    // Find matching local session by daemonSessionId or conversationId
+    const match = allSessions.find((s) =>
+      (chat.daemonSessionId && s.daemonSessionId === chat.daemonSessionId) ||
+      (chat.resumeId && s.conversationId === chat.resumeId),
+    );
+    if (match) {
+      void deleteSession(match.id);
+    }
+    // Remove from local workspace chats state + cache
+    setWorkspaceChats((prev) => {
+      const next = prev.filter((c) => c.id !== chat.id);
+      WORKSPACE_CHAT_CACHE.set(workspaceId, next);
+      return next;
+    });
+  }, [allSessions, deleteSession, workspaceId]);
+
   const handleOpenWorkspaceChat = useCallback(async (chat: WorkspaceChatInfo) => {
     if (!workspace) return;
     setOpeningChatId(chat.id);
@@ -254,9 +271,12 @@ export function WorkspaceDetailScreen({ route, navigation }: Props): JSX.Element
             const chat = item.chat;
             const isOpening = openingChatId === chat.id;
             return (
-              <Pressable
+              <SwipeableRow
                 onPress={() => void handleOpenWorkspaceChat(chat)}
                 disabled={isOpening}
+                onDelete={() => handleDeleteWorkspaceChat(chat)}
+                confirmTitle="Delete Chat"
+                confirmMessage={`Delete this ${chat.tool} chat? This cannot be undone.`}
               >
                 <GlassContainer variant="card" className="p-3.5 gap-2.5">
                   <View className="flex-row justify-between items-center">
@@ -292,51 +312,48 @@ export function WorkspaceDetailScreen({ route, navigation }: Props): JSX.Element
                     )}
                   </View>
                 </GlassContainer>
-              </Pressable>
+              </SwipeableRow>
             );
           }
 
           const session = item.session;
           return (
             <SwipeableRow
+              onPress={() => navigation.navigate("AiChat", { sessionId: session.id, workspaceId: workspace.id })}
               onDelete={() => deleteSession(session.id)}
               confirmTitle="Delete Session"
               confirmMessage={`Delete this ${session.tool} session? This cannot be undone.`}
             >
-              <Pressable
-                onPress={() => navigation.navigate("AiChat", { sessionId: session.id, workspaceId: workspace.id })}
-              >
-                <GlassContainer variant="card" className="p-3.5 gap-2.5">
-                  <View className="flex-row justify-between items-center">
-                    <View className="flex-row items-center gap-2">
-                      <ProviderIcon tool={session.tool as "claude" | "codex"} size={20} />
-                      <Text className="text-foreground text-sm font-semibold capitalize">{session.tool}</Text>
-                    </View>
-                    <Text className="text-muted-foreground text-xs">
-                      {session.updatedAt ? formatRelativeTime(session.updatedAt) : "unknown"}
-                    </Text>
+              <GlassContainer variant="card" className="p-3.5 gap-2.5">
+                <View className="flex-row justify-between items-center">
+                  <View className="flex-row items-center gap-2">
+                    <ProviderIcon tool={session.tool as "claude" | "codex"} size={20} />
+                    <Text className="text-foreground text-sm font-semibold capitalize">{session.tool}</Text>
                   </View>
-                  <Text className="text-foreground text-sm" numberOfLines={2}>
-                    {sessionTitle(session)}
+                  <Text className="text-muted-foreground text-xs">
+                    {session.updatedAt ? formatRelativeTime(session.updatedAt) : "unknown"}
                   </Text>
-                  <View className="flex-row items-center justify-between">
-                    <Text className="text-dimmed text-xs">
-                      {session.messages.length} messages
-                    </Text>
-                    <Text
-                      className={cn(
-                        "text-xs font-semibold capitalize",
-                        session.status === "idle" && "text-dimmed",
-                        session.status === "running" && "text-accent",
-                        session.status === "failed" && "text-destructive",
-                        (session.status === "cancelled" || session.status === "awaiting_input") && "text-warning",
-                      )}
-                    >
-                      {session.status}
-                    </Text>
-                  </View>
-                </GlassContainer>
-              </Pressable>
+                </View>
+                <Text className="text-foreground text-sm" numberOfLines={2}>
+                  {sessionTitle(session)}
+                </Text>
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-dimmed text-xs">
+                    {session.messages.length} messages
+                  </Text>
+                  <Text
+                    className={cn(
+                      "text-xs font-semibold capitalize",
+                      session.status === "idle" && "text-dimmed",
+                      session.status === "running" && "text-accent",
+                      session.status === "failed" && "text-destructive",
+                      (session.status === "cancelled" || session.status === "awaiting_input") && "text-warning",
+                    )}
+                  >
+                    {session.status}
+                  </Text>
+                </View>
+              </GlassContainer>
             </SwipeableRow>
           );
         }}
