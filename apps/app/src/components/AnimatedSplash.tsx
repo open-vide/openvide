@@ -80,7 +80,7 @@ export function AnimatedSplash({ children }: Props): JSX.Element {
         >
           {animationStarted && (
             <LottieView
-              source={splashAnimations[Constants.expoConfig?.extra?.appVariant ?? "production"]}
+              source={splashAnimations[APP_VARIANT]}
               autoPlay
               loop={false}
               speed={2}
@@ -100,8 +100,11 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: SPLASH_BG,
+    alignItems: "center",
+    justifyContent: "center",
   },
   lottie: {
-    flex: 1,
+    width: 290,
+    height: 290,
   },
 });
