@@ -1,0 +1,8 @@
+{
+  "displayName": "MyApp Dev",
+  "iosBundleIdentifier": "com.yourorg.yourapp.dev",
+  "androidPackage": "com.yourorg.yourapp.dev",
+  "scheme": "yourapp-dev",
+  "splashBackgroundColor": "#FFFFFF",
+  "versionCode": 1
+}

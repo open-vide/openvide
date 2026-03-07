@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "owner": "your-expo-username-or-org",
+    "name": "Your App Name",
+    "slug": "your-app-slug",
+    "extra": {
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
+    }
+  }
+}

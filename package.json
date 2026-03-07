@@ -1,0 +1,26 @@
+{
+  "name": "open-vide-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "yarn@4.12.0+sha512.f45ab632439a67f8bc759bf32ead036a1f413287b9042726b7cc4818b7b49e14e9423ba49b18f9e06ea4941c1ad062385b1d8760a8d5091a1a31e5f6219afca8",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "check": "turbo run check",
+    "dev": "turbo run dev --filter=@openvide/app",
+    "start": "turbo run start --filter=@openvide/app",
+    "web": "turbo run web --filter=@openvide/app",
+    "ios": "turbo run ios --filter=@openvide/app",
+    "ios:install": "turbo run ios:install --filter=@openvide/app",
+    "android": "turbo run android --filter=@openvide/app",
+    "prebuild": "turbo run prebuild --filter=@openvide/app",
+    "prebuild:clean": "turbo run prebuild:clean --filter=@openvide/app",
+    "daemon:build": "turbo run build --filter=openvide-daemon",
+    "daemon:dev": "turbo run dev --filter=openvide-daemon"
+  },
+  "devDependencies": {
+    "turbo": "2.8.10"
+  }
+}
