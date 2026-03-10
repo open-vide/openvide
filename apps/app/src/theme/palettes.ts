@@ -268,12 +268,12 @@ export interface ThemeMeta {
 }
 
 export const THEME_META: ThemeMeta[] = [
-  { id: "default-light", label: "Default Light", previewAccent: "#2EAD56", previewBg: "#FFFFFF", isDark: false },
-  { id: "default-dark", label: "Default Dark", previewAccent: "#2EAD56", previewBg: "#1E1E1E", isDark: true },
-  { id: "claude-light", label: "Claude Light", previewAccent: "#C4704B", previewBg: "#FAF7F2", isDark: false },
-  { id: "claude-dark", label: "Claude Dark", previewAccent: "#D4836B", previewBg: "#171614", isDark: true },
-  { id: "codex-light", label: "Codex Light", previewAccent: "#000000", previewBg: "#FFFFFF", isDark: false },
-  { id: "codex-dark", label: "Codex Dark", previewAccent: "#FFFFFF", previewBg: "#1E1E1E", isDark: true },
+  { id: "default-light", label: "Emerald Light", previewAccent: "#2EAD56", previewBg: "#FFFFFF", isDark: false },
+  { id: "default-dark", label: "Emerald Dark", previewAccent: "#2EAD56", previewBg: "#1E1E1E", isDark: true },
+  { id: "claude-light", label: "Terracotta Light", previewAccent: "#C4704B", previewBg: "#FAF7F2", isDark: false },
+  { id: "claude-dark", label: "Terracotta Dark", previewAccent: "#D4836B", previewBg: "#171614", isDark: true },
+  { id: "codex-light", label: "Mono Light", previewAccent: "#000000", previewBg: "#FFFFFF", isDark: false },
+  { id: "codex-dark", label: "Mono Dark", previewAccent: "#FFFFFF", previewBg: "#1E1E1E", isDark: true },
 ];
 
 // ---------------------------------------------------------------------------
