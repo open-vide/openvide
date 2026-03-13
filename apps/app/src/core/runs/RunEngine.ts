@@ -338,69 +338,80 @@ export class RunEngine {
     this.notify(run);
     await this.persist(run);
 
-    try {
-      const handle = await this.ssh.runCommand(
-        input.target,
-        input.credentials,
-        input.command,
-        {
-          onStdout: (chunk) => {
-            if (!this.active.has(run.id)) {
-              return;
-            }
-            if (active.run.status === "connecting") {
-              active.run.status = "running";
-              if (shouldLogConnection) {
-                this.appendLine(active, "system", "SSH connection established");
+    // Launch SSH connection + command in the background so startRun returns
+    // immediately. This lets callers subscribe via waitForTerminalRun before
+    // the timeout fires, preventing a hang when SSH blocks (unreachable host).
+    void (async () => {
+      try {
+        const handle = await this.ssh.runCommand(
+          input.target,
+          input.credentials,
+          input.command,
+          {
+            onStdout: (chunk) => {
+              if (!this.active.has(run.id)) {
+                return;
               }
-            }
-            this.appendChunk(active, "stdout", chunk);
-            this.notify(active.run);
-            void this.persist(active.run);
-          },
-          onStderr: (chunk) => {
-            if (!this.active.has(run.id)) {
-              return;
-            }
-            if (active.run.status === "connecting") {
-              active.run.status = "running";
-              if (shouldLogConnection) {
-                this.appendLine(active, "system", "SSH connection established");
+              if (active.run.status === "connecting") {
+                active.run.status = "running";
+                if (shouldLogConnection) {
+                  this.appendLine(active, "system", "SSH connection established");
+                }
               }
-            }
-            this.appendChunk(active, "stderr", chunk);
-            this.notify(active.run);
-            void this.persist(active.run);
+              this.appendChunk(active, "stdout", chunk);
+              this.notify(active.run);
+              void this.persist(active.run);
+            },
+            onStderr: (chunk) => {
+              if (!this.active.has(run.id)) {
+                return;
+              }
+              if (active.run.status === "connecting") {
+                active.run.status = "running";
+                if (shouldLogConnection) {
+                  this.appendLine(active, "system", "SSH connection established");
+                }
+              }
+              this.appendChunk(active, "stderr", chunk);
+              this.notify(active.run);
+              void this.persist(active.run);
+            },
           },
-        },
-        { mode: interactiveMode ? "interactive" : "scripted" },
-      );
+          { mode: interactiveMode ? "interactive" : "scripted" },
+        );
 
-      active.cancel = handle.cancel;
-      active.sendInput = handle.sendInput;
-      if (active.run.status === "connecting") {
-        active.run.status = "running";
-        if (shouldLogConnection) {
-          this.appendLine(active, "system", "SSH connection established");
+        // Run was already finalized by timeout while SSH was connecting — bail.
+        if (!this.active.has(run.id)) {
+          void handle.wait.catch(() => {});
+          return;
         }
-        this.notify(active.run);
-        void this.persist(active.run);
-      }
 
-      handle.wait
-        .then(async (result) => {
-          await this.finalize(active, result.exitCode, result.signal);
-        })
-        .catch(async (error: unknown) => {
-          const message = error instanceof Error ? error.message : String(error);
-          this.appendLine(active, "system", `ERROR: ${message}`);
-          await this.finalize(active, 1, "SIGTERM");
-        });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.appendLine(active, "system", `ERROR: ${message}`);
-      await this.finalize(active, 1, "SIGTERM");
-    }
+        active.cancel = handle.cancel;
+        active.sendInput = handle.sendInput;
+        if (active.run.status === "connecting") {
+          active.run.status = "running";
+          if (shouldLogConnection) {
+            this.appendLine(active, "system", "SSH connection established");
+          }
+          this.notify(active.run);
+          void this.persist(active.run);
+        }
+
+        handle.wait
+          .then(async (result) => {
+            await this.finalize(active, result.exitCode, result.signal);
+          })
+          .catch(async (error: unknown) => {
+            const message = error instanceof Error ? error.message : String(error);
+            this.appendLine(active, "system", `ERROR: ${message}`);
+            await this.finalize(active, 1, "SIGTERM");
+          });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.appendLine(active, "system", `ERROR: ${message}`);
+        await this.finalize(active, 1, "SIGTERM");
+      }
+    })();
 
     return cloneRun(run);
   }
