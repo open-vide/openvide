@@ -4,6 +4,7 @@ import { readOutputLines, tailOutput } from "./outputStore.js";
 import { loadState } from "./stateStore.js";
 import { generateKeyPair } from "./keygen.js";
 import { encodeQR } from "./qrText.js";
+import { tryCacheClaudeAuth } from "./authCache.js";
 import type { IpcResponse, Tool } from "./types.js";
 
 const DAEMON_VERSION = "0.1.7";
@@ -64,6 +65,11 @@ function failJson(error: string): never {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.length === 0) usage();
+
+  // Opportunistically cache Claude auth credentials from macOS Keychain.
+  // Succeeds when CLI runs in a session with Keychain access (local terminal).
+  // This ensures the daemon can authenticate even when started from SSH.
+  tryCacheClaudeAuth();
 
   const command = args[0];
 

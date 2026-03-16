@@ -16,26 +16,33 @@ export function useVoiceInput(
   const [isListening, setIsListening] = useState(false);
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
+  const stoppedRef = useRef(false);
 
   const start = useCallback(async () => {
     const { granted } =
       await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!granted) return;
+    stoppedRef.current = false;
     ExpoSpeechRecognitionModule.start({ lang, interimResults: true });
     setIsListening(true);
   }, [lang]);
 
   const stop = useCallback(() => {
+    stoppedRef.current = true;
     ExpoSpeechRecognitionModule.stop();
     setIsListening(false);
   }, []);
 
   useSpeechRecognitionEvent("result", (event) => {
+    if (stoppedRef.current) return;
     const transcript = event.results[0]?.transcript;
     if (transcript) onTranscriptRef.current(transcript);
   });
 
-  useSpeechRecognitionEvent("end", () => setIsListening(false));
+  useSpeechRecognitionEvent("end", () => {
+    stoppedRef.current = false;
+    setIsListening(false);
+  });
 
   return { isListening, start, stop };
 }

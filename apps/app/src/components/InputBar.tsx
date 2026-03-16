@@ -4,14 +4,13 @@ import { Animated, Easing, LayoutAnimation, Platform, Pressable, TextInput, UIMa
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-import { cn } from "../lib/utils";
 import { Icon } from "./Icon";
 import { useThemeColors } from "../constants/colors";
 
 const BAR_COUNT = 24;
 
 function WaveformBars() {
-  const { accent } = useThemeColors();
+  const { mutedForeground } = useThemeColors();
   const anims = useMemo(
     () => Array.from({ length: BAR_COUNT }, () => new Animated.Value(0.3)),
     [],
@@ -50,7 +49,7 @@ function WaveformBars() {
             width: 3,
             height: 24,
             borderRadius: 1.5,
-            backgroundColor: accent,
+            backgroundColor: mutedForeground,
             transform: [{ scaleY: anim }],
           }}
         />
@@ -70,7 +69,6 @@ export function InputBar({
   isListening = false,
   onVoiceStart,
   onVoiceEnd,
-  onAttachPress,
 }: {
   placeholder?: string;
   isRunning?: boolean;
@@ -82,9 +80,8 @@ export function InputBar({
   isListening?: boolean;
   onVoiceStart?: () => void;
   onVoiceEnd?: () => void;
-  onAttachPress?: () => void;
 }): JSX.Element {
-  const { accent, dimmed, primaryForeground } = useThemeColors();
+  const { foreground, primaryForeground, mutedForeground, dimmed } = useThemeColors();
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -125,6 +122,7 @@ export function InputBar({
   const handleSend = (): void => {
     const trimmed = text.trim();
     if (trimmed.length === 0) return;
+    if (isListening) onVoiceEnd?.();
     onSend(trimmed);
     onChangeText("");
   };
@@ -142,19 +140,33 @@ export function InputBar({
   return (
     <View style={{ paddingBottom: Math.max(12, inset) }}>
       <View className="flex-row items-end px-3 gap-2">
-        {/* Text field / waveform area */}
-        <View className="flex-1 flex-row items-end bg-muted rounded-2xl" style={{ minHeight: 54 }}>
+        {/* Left stop-listening button — self-centered so it stays mid-pill */}
+        {isListening && (
+          <Pressable
+            className="w-12 h-12 rounded-full bg-muted items-center justify-center active:opacity-80"
+            style={{ alignSelf: "center" }}
+            onPress={() => onVoiceEnd?.()}
+            accessibilityRole="button"
+            accessibilityLabel="Stop listening"
+          >
+            <Icon name="square" size={14} color={mutedForeground} />
+          </Pressable>
+        )}
+
+        {/* Main pill container */}
+        <View
+          className="flex-1 flex-row items-center bg-muted"
+          style={{ minHeight: 48, borderRadius: 24 }}
+        >
           {isListening ? (
             <WaveformBars />
           ) : (
             <TextInput
-              className="flex-1 text-foreground text-[16px] pl-4 pr-1 max-h-[120px]"
-              style={{ paddingTop: 0, paddingBottom: 18 }}
+              className="flex-1 text-foreground text-[16px] pl-4 pr-2 max-h-[120px]"
+              style={{ paddingTop: 14, paddingBottom: 14 }}
               value={text}
               onChangeText={onChangeText}
-              placeholder={
-                isRunning && !hasText ? "Running\u2026" : placeholder
-              }
+              placeholder={isRunning && !hasText ? "Running\u2026" : placeholder}
               placeholderTextColor={dimmed}
               multiline
               maxLength={4000}
@@ -162,62 +174,36 @@ export function InputBar({
               accessibilityLabel="Message input"
             />
           )}
-          {/* Right-side button inside the text field */}
-          {!isListening && (
-            <View className="flex-row items-center">
-              {onAttachPress && !hasText && !isRunning && (
-                <Pressable
-                  className="h-[54px] items-center justify-center pl-1 active:opacity-80"
-                  onPress={onAttachPress}
-                  accessibilityRole="button"
-                  accessibilityLabel="Attach file"
-                >
-                  <Icon name="paperclip" size={20} color={dimmed} />
-                </Pressable>
-              )}
-              <Pressable
-                className="h-[54px] items-center justify-center pl-2 pr-3 active:opacity-80"
-                onPress={
-                  isRunning && !hasText
-                    ? () => onCancel?.()
-                    : hasText
-                      ? handleSend
-                      : handleMicPress
-                }
-                accessibilityRole="button"
-                accessibilityLabel={
-                  isRunning && !hasText ? "Stop" : hasText ? "Send" : "Voice input"
-                }
-              >
-                {isRunning && !hasText ? (
-                  <View className="w-9 h-9 rounded-full bg-destructive items-center justify-center">
-                    <Icon name="square" size={14} color="#FFFFFF" />
-                  </View>
-                ) : hasText ? (
-                  <View className="w-9 h-9 rounded-full bg-accent items-center justify-center">
-                    <Icon name="send" size={18} color={primaryForeground} />
-                  </View>
-                ) : (
-                  <Icon name="mic" size={22} color={dimmed} />
-                )}
-              </Pressable>
-            </View>
-          )}
-        </View>
 
-        {/* External button: only for voice-listening stop */}
-        {isListening && (
+          {/* Right circular action button */}
           <Pressable
-            className="bg-foreground w-[54px] h-[54px] rounded-full items-center justify-center active:opacity-80"
-            onPress={handleMicPress}
+            className="w-10 h-10 rounded-full items-center justify-center active:opacity-80"
+            style={{ backgroundColor: foreground, marginRight: 8 }}
+            onPress={
+              isListening
+                ? handleSend
+                : isRunning && !hasText
+                  ? () => onCancel?.()
+                  : hasText
+                    ? handleSend
+                    : handleMicPress
+            }
             accessibilityRole="button"
-            accessibilityLabel="Stop listening"
+            accessibilityLabel={
+              isListening ? "Send" : isRunning && !hasText ? "Stop" : hasText ? "Send" : "Voice input"
+            }
           >
-            <Animated.View style={{ opacity: pulseAnim }}>
-              <Icon name="mic" size={20} color="#FFFFFF" />
+            <Animated.View style={isListening ? { opacity: pulseAnim } : undefined}>
+              {isRunning && !hasText ? (
+                <Icon name="square" size={14} color={primaryForeground} />
+              ) : hasText || isListening ? (
+                <Icon name="arrow-up" size={20} color={primaryForeground} />
+              ) : (
+                <Icon name="mic" size={20} color={primaryForeground} />
+              )}
             </Animated.View>
           </Pressable>
-        )}
+        </View>
       </View>
     </View>
   );

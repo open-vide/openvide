@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as child_process from "node:child_process";
 import { daemonDir, log, logError } from "./utils.js";
 import { startServer, cleanupSocket } from "./ipc.js";
+import { tryCacheClaudeAuth } from "./authCache.js";
 import * as sm from "./sessionManager.js";
 
 const PID_FILE = "daemon.pid";
@@ -233,6 +234,10 @@ export function runDaemonMain(): void {
 
   // Initialize session manager (loads state, marks interrupted)
   sm.init();
+
+  // Try to cache Claude auth credentials from Keychain.
+  // Succeeds when daemon is started from a local GUI session (not SSH).
+  tryCacheClaudeAuth();
 
   // Start IPC server
   const server = startServer();

@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as readline from "node:readline";
 import { buildCommand } from "./commandBuilder.js";
 import { appendOutput } from "./outputStore.js";
+import { resolveClaudeAuth } from "./authCache.js";
 import { nowEpoch, log, logError } from "./utils.js";
 import type { SessionRecord, Tool, OutputLine } from "./types.js";
 
@@ -23,7 +24,7 @@ export interface RunningProcess {
  * The daemon's inherited PATH may be minimal (e.g. from a bare SSH session),
  * so we ensure popular install locations are reachable.
  */
-function augmentedEnv(): NodeJS.ProcessEnv {
+function augmentedEnv(extraEnv?: Record<string, string>): NodeJS.ProcessEnv {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
   const extraDirs = [
     `${home}/.local/bin`,
@@ -34,18 +35,19 @@ function augmentedEnv(): NodeJS.ProcessEnv {
     "/usr/local/bin",
   ];
   const currentPath = process.env.PATH ?? "/usr/bin:/bin";
-  const env = {
+  const env: Record<string, string | undefined> = {
     ...process.env,
     PATH: [...extraDirs, currentPath].join(":"),
+    ...extraEnv,
   };
   // Remove env vars that cause Claude Code to think this is a nested session.
   const blockedVars = new Set(["CLAUDECODE", "CLAUDE_CODE"]);
   for (const key of Object.keys(env)) {
     if (blockedVars.has(key.toUpperCase())) {
-      delete (env as Record<string, string | undefined>)[key];
+      delete env[key];
     }
   }
-  return env;
+  return env as NodeJS.ProcessEnv;
 }
 
 /**
@@ -99,11 +101,23 @@ export function spawnTurn(
     return /unexpected argument/i.test(stderrText) && /usage:\s*codex exec/i.test(stderrText);
   };
 
+  // Resolve auth for Claude sessions: try macOS Keychain, fall back to cache.
+  // On macOS, SSH sessions with key-based auth don't unlock the login Keychain,
+  // so daemon-spawned Claude can't find its OAuth token. We read it ourselves
+  // and pass it as ANTHROPIC_API_KEY.
+  const authEnv: Record<string, string> = {};
+  if (session.tool === "claude" && !process.env.ANTHROPIC_API_KEY) {
+    const token = resolveClaudeAuth();
+    if (token) {
+      authEnv.ANTHROPIC_API_KEY = token;
+    }
+  }
+
   const spawnCommand = (cmd: string, usedConversationId: string | undefined): void => {
     child = child_process.spawn("sh", ["-c", cmd], {
       cwd: session.workingDirectory,
       stdio: ["pipe", "pipe", "pipe"],
-      env: augmentedEnv(),
+      env: augmentedEnv(authEnv),
     });
     child.stdin?.end();
 
