@@ -12,6 +12,7 @@ import { DiffView } from "./DiffView";
 import { MonoBlock } from "./MonoBlock";
 import { ToolActivityRow } from "./ToolActivityRow";
 import { TruncatedText } from "./TruncatedText";
+import { SubagentCard } from "./SubagentCard";
 import { ToolUseCard } from "./ToolUseCard";
 import { cn } from "../lib/utils";
 import { useThemeColors } from "../constants/colors";
@@ -396,6 +397,9 @@ export const AiContentBlockView = React.memo(function AiContentBlockView({
           ))}
         </CollapsibleCard>
       );
+
+    case "subagent":
+      return <SubagentCard block={block} />;
 
     default:
       return <View />;

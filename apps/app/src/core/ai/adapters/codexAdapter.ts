@@ -6,6 +6,13 @@ function escapeShellArg(arg: string): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
+function extractSubagentNickname(prompt: string): string {
+  const match = /nickname\s+(?:is\s+)?(\w+)/i.exec(prompt);
+  if (match?.[1]) return match[1];
+  const clean = prompt.replace(/^Your nickname is \w+\.\s*/i, "").trim();
+  return clean.slice(0, 40) || "Subagent";
+}
+
 function trackPendingSemanticCommand(context: Record<string, unknown> | undefined, key: string | undefined): void {
   if (!context || !key) return;
   const counts = context.pendingSemanticCommands as Record<string, number> | undefined;
@@ -56,6 +63,8 @@ export const codexAdapter: CliAdapter = {
     return {
       lastThreadId: undefined,
       pendingSemanticCommands: {},
+      spawnedAgents: {} as Record<string, { threadId?: string; name: string; prompt: string }>,
+      threadToSpawnId: {} as Record<string, string>,
     };
   },
 
@@ -138,7 +147,7 @@ export const codexAdapter: CliAdapter = {
       return events;
     }
 
-    if (type === "item.completed" || type === "item.created") {
+    if (type === "item.completed" || type === "item.created" || type === "item.started") {
       const item = obj["item"] as Record<string, unknown> | undefined;
       if (!item) {
         return events;
@@ -369,6 +378,69 @@ export const codexAdapter: CliAdapter = {
           role: "assistant",
           block: { type: "file_change", filePath, diff },
         });
+      } else if (itemType === "collab_tool_call") {
+        const tool = typeof item["tool"] === "string" ? item["tool"] : "";
+        const status = typeof item["status"] === "string" ? item["status"] : "";
+        const prompt = typeof item["prompt"] === "string" ? item["prompt"] : "";
+        const receiverIds = Array.isArray(item["receiver_thread_ids"])
+          ? (item["receiver_thread_ids"] as string[])
+          : [];
+        const agentsStates = (typeof item["agents_states"] === "object" && item["agents_states"] != null)
+          ? item["agents_states"] as Record<string, Record<string, unknown>>
+          : {};
+        const itemId = typeof item["id"] === "string" ? item["id"] : "";
+        const spawnedAgents = context?.spawnedAgents as Record<string, { threadId?: string; name: string; prompt: string }> | undefined;
+        const threadToSpawnId = context?.threadToSpawnId as Record<string, string> | undefined;
+
+        if (tool === "spawn_agent") {
+          if (type === "item.started" || type === "item.created" || status === "in_progress") {
+            const name = extractSubagentNickname(prompt);
+            if (spawnedAgents) {
+              spawnedAgents[itemId] = { name, prompt };
+            }
+            events.push({
+              type: "content_block",
+              role: "assistant",
+              block: {
+                type: "subagent",
+                subagentId: itemId,
+                subagentName: name,
+                subagentPrompt: prompt,
+                subagentStatus: "running",
+              },
+            });
+          }
+          if (status === "completed") {
+            const threadId = receiverIds[0];
+            if (threadId && spawnedAgents && threadToSpawnId) {
+              if (spawnedAgents[itemId]) {
+                spawnedAgents[itemId].threadId = threadId;
+              }
+              threadToSpawnId[threadId] = itemId;
+            }
+          }
+        } else if ((tool === "wait" || tool === "send_input") && status === "completed") {
+          for (const [threadId, state] of Object.entries(agentsStates)) {
+            const stateStatus = typeof state["status"] === "string" ? state["status"] : "";
+            const message = typeof state["message"] === "string" ? state["message"] : undefined;
+            const spawnId = threadToSpawnId?.[threadId];
+            if (!spawnId) continue;
+
+            if (stateStatus === "completed" || stateStatus === "failed") {
+              events.push({
+                type: "content_block",
+                role: "assistant",
+                block: {
+                  type: "subagent",
+                  subagentId: spawnId,
+                  subagentResult: message ?? undefined,
+                  subagentStatus: stateStatus === "failed" ? "failed" : "completed",
+                },
+              });
+            }
+          }
+        }
+        // close_agent and other lifecycle tools — no UI events
       }
 
       return events;

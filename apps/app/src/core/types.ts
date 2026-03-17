@@ -148,7 +148,8 @@ export type AiContentBlockType =
   | "command_exec"
   | "error"
   | "usage"
-  | "web_search";
+  | "web_search"
+  | "subagent";
 
 export interface AiContentBlock {
   type: AiContentBlockType;
@@ -172,6 +173,12 @@ export interface AiContentBlock {
   toolStatus?: "running" | "completed" | "error";
   activityText?: string;
   durationMs?: number;
+  // subagent (Codex)
+  subagentId?: string;
+  subagentName?: string;
+  subagentPrompt?: string;
+  subagentResult?: string;
+  subagentStatus?: "running" | "completed" | "failed";
 }
 
 export interface AiMessage {

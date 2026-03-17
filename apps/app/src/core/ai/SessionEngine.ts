@@ -209,6 +209,18 @@ export class SessionEngine {
         }
       }
 
+      // Subagent blocks: update existing block in-place if same subagentId
+      if (event.block.type === "subagent" && event.block.subagentId) {
+        for (let i = msg.content.length - 1; i >= 0; i--) {
+          const existing = msg.content[i];
+          if (existing?.type === "subagent" && existing.subagentId === event.block.subagentId) {
+            if (event.block.subagentStatus) existing.subagentStatus = event.block.subagentStatus;
+            if (event.block.subagentResult != null) existing.subagentResult = event.block.subagentResult;
+            return;
+          }
+        }
+      }
+
       msg.content.push(event.block);
       return;
     }

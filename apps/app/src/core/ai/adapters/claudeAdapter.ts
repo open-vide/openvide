@@ -5,9 +5,20 @@ function escapeShellArg(arg: string): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
+function isSubagentTool(name: string): boolean {
+  return name === "Agent" || name === "dispatch_agent";
+}
+
 export const claudeAdapter: CliAdapter = {
   tool: "claude",
   streaming: true,
+
+  createParseContext(): Record<string, unknown> {
+    return {
+      // Set of tool_use IDs that are Agent/subagent calls
+      agentToolIds: new Set<string>(),
+    };
+  },
 
   buildCommand(input) {
     const parts = ["claude", "-p", escapeShellArg(input.prompt), "--output-format", "stream-json", "--verbose"];
@@ -25,7 +36,7 @@ export const claudeAdapter: CliAdapter = {
     return parts.join(" ");
   },
 
-  parseLine(jsonLine: string): CliStreamEvent[] {
+  parseLine(jsonLine: string, context?: Record<string, unknown>): CliStreamEvent[] {
     const trimmed = jsonLine.trim();
     if (trimmed.length === 0) {
       return [];
@@ -77,16 +88,42 @@ export const claudeAdapter: CliAdapter = {
             block: { type: "thinking", text: block["thinking"] as string },
           });
         } else if (blockType === "tool_use" || blockType === "server_tool_use") {
-          events.push({
-            type: "content_block",
-            role: "assistant",
-            block: {
-              type: "tool_use",
-              toolName: block["name"] as string,
-              toolId: block["id"] as string,
-              toolInput: block["input"],
-            },
-          });
+          const toolName = block["name"] as string;
+          const toolId = block["id"] as string;
+          const toolInput = block["input"] as Record<string, unknown> | undefined;
+
+          if (isSubagentTool(toolName) && toolId) {
+            const agentIds = context?.agentToolIds as Set<string> | undefined;
+            agentIds?.add(toolId);
+            const description = typeof toolInput?.["description"] === "string"
+              ? toolInput["description"]
+              : "";
+            const prompt = typeof toolInput?.["prompt"] === "string"
+              ? toolInput["prompt"]
+              : "";
+            events.push({
+              type: "content_block",
+              role: "assistant",
+              block: {
+                type: "subagent",
+                subagentId: toolId,
+                subagentName: description || "Agent",
+                subagentPrompt: prompt,
+                subagentStatus: "running",
+              },
+            });
+          } else {
+            events.push({
+              type: "content_block",
+              role: "assistant",
+              block: {
+                type: "tool_use",
+                toolName,
+                toolId,
+                toolInput,
+              },
+            });
+          }
         } else if (blockType === "web_search_tool_result") {
           const searchResults: Array<{ title: string; url: string; snippet: string }> = [];
           const content = block["content"] as Array<Record<string, unknown>> | undefined;
@@ -112,6 +149,7 @@ export const claudeAdapter: CliAdapter = {
           });
         } else if (blockType === "tool_result") {
           const isError = block["is_error"] === true;
+          const toolUseId = block["tool_use_id"] as string;
           let resultText = "";
           const resultContent = block["content"];
           if (typeof resultContent === "string") {
@@ -123,16 +161,31 @@ export const claudeAdapter: CliAdapter = {
               .join("\n");
           }
           resultText = sanitizeCodexToolOutput(resultText);
-          events.push({
-            type: "content_block",
-            role: "assistant",
-            block: {
-              type: "tool_result",
-              toolId: block["tool_use_id"] as string,
-              result: resultText,
-              isError,
-            },
-          });
+
+          const agentIds = context?.agentToolIds as Set<string> | undefined;
+          if (agentIds?.has(toolUseId)) {
+            events.push({
+              type: "content_block",
+              role: "assistant",
+              block: {
+                type: "subagent",
+                subagentId: toolUseId,
+                subagentResult: resultText,
+                subagentStatus: isError ? "failed" : "completed",
+              },
+            });
+          } else {
+            events.push({
+              type: "content_block",
+              role: "assistant",
+              block: {
+                type: "tool_result",
+                toolId: toolUseId,
+                result: resultText,
+                isError,
+              },
+            });
+          }
         }
       }
       return events;
@@ -173,11 +226,11 @@ export const claudeAdapter: CliAdapter = {
     return events;
   },
 
-  parseComplete(jsonBlob: string): CliStreamEvent[] {
+  parseComplete(jsonBlob: string, context?: Record<string, unknown>): CliStreamEvent[] {
     const lines = jsonBlob.split("\n");
     const events: CliStreamEvent[] = [];
     for (const line of lines) {
-      events.push(...this.parseLine(line));
+      events.push(...this.parseLine(line, context));
     }
     return events;
   },
