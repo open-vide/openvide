@@ -238,7 +238,7 @@ export function TeamListScreen({ navigation }: Props): JSX.Element {
               className="bg-muted rounded-2xl px-4 py-3 text-foreground"
               value={cwd}
               onChangeText={setCwd}
-              placeholder="/Users/fabiogalimberti/Desktop/git/even-realities"
+              placeholder="~/projects/openvide"
               placeholderTextColor={mutedForeground}
             />
           </View>

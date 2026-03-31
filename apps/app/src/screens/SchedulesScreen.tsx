@@ -494,7 +494,7 @@ export function SchedulesScreen({ navigation }: Props): JSX.Element {
                   className="bg-muted rounded-2xl px-4 py-3 text-foreground"
                   value={draft.cwd}
                   onChangeText={(value) => setDraft((current) => ({ ...current, cwd: value }))}
-                  placeholder="/Users/fabiogalimberti/Desktop/git/even-realities"
+                  placeholder="~/projects/openvide"
                   placeholderTextColor={mutedForeground}
                   autoCapitalize="none"
                   autoCorrect={false}

@@ -558,7 +558,7 @@ export function TeamDetailScreen({ navigation, route }: Props): JSX.Element {
               className="bg-muted rounded-2xl px-4 py-3 text-foreground"
               value={editCwd}
               onChangeText={setEditCwd}
-              placeholder="/Users/..."
+              placeholder="~/projects/openvide"
               placeholderTextColor={mutedForeground}
             />
           </View>

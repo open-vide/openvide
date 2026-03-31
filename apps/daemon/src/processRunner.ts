@@ -50,6 +50,18 @@ function augmentedEnv(extraEnv?: Record<string, string>): NodeJS.ProcessEnv {
   return env as NodeJS.ProcessEnv;
 }
 
+function shouldInjectClaudeApiKey(): boolean {
+  if (process.env.ANTHROPIC_API_KEY) return false;
+
+  const isMac = process.platform === "darwin";
+  if (!isMac) return true;
+
+  const isSshSession = Boolean(process.env.SSH_CONNECTION || process.env.SSH_TTY);
+  if (isSshSession) return true;
+
+  return process.env.OPENVIDE_FORCE_CLAUDE_API_KEY === "1";
+}
+
 /**
  * Spawn a CLI process for a session turn.
  * Captures stdout/stderr line-by-line to output.jsonl.
@@ -106,7 +118,7 @@ export function spawnTurn(
   // so daemon-spawned Claude can't find its OAuth token. We read it ourselves
   // and pass it as ANTHROPIC_API_KEY.
   const authEnv: Record<string, string> = {};
-  if (session.tool === "claude" && !process.env.ANTHROPIC_API_KEY) {
+  if (session.tool === "claude" && shouldInjectClaudeApiKey()) {
     const token = resolveClaudeAuth();
     if (token) {
       authEnv.ANTHROPIC_API_KEY = token;

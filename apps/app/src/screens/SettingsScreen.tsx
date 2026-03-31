@@ -335,7 +335,7 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
                     className="bg-muted rounded-2xl px-4 py-3 text-foreground"
                     value={defaultCwdDraft}
                     onChangeText={setDefaultCwdDraft}
-                    placeholder="/Users/fabiogalimberti/Desktop/git"
+                    placeholder="~/projects"
                     placeholderTextColor={mutedForeground}
                     autoCapitalize="none"
                     autoCorrect={false}
