@@ -1,7 +1,6 @@
 import type { Host as StoreHost } from '../state/types';
 import type { WebHost } from '../types';
 import { HOSTS_STORAGE_KEY } from './constants';
-import { decryptJsonDetailed, encryptJsonDetailed } from './secure-crypto';
 import { storageSetRaw, storageRemove } from 'even-toolkit/storage';
 
 type HostLike = WebHost | StoreHost;
@@ -42,23 +41,18 @@ export function loadHostsSnapshot(): HostLike[] {
   }
 }
 
-async function loadTokenMap(): Promise<{ tokens: Record<string, HostSecrets>; available: boolean }> {
+function loadTokenMap(): { tokens: Record<string, HostSecrets>; available: boolean } {
   try {
     const raw = localStorage.getItem(HOSTS_TOKENS_STORAGE_KEY);
-    if (!raw) {
-      return { tokens: {}, available: true };
-    }
-    const decrypted = await decryptJsonDetailed<Record<string, string | HostSecrets>>(raw, {});
+    if (!raw) return { tokens: {}, available: true };
+    const parsed = JSON.parse(raw) as Record<string, string | HostSecrets>;
     const normalized = Object.fromEntries(
-      Object.entries(decrypted.value).map(([hostId, value]) => [
+      Object.entries(parsed).map(([hostId, value]) => [
         hostId,
         typeof value === 'string' ? { token: value } satisfies HostSecrets : value ?? {},
       ]),
     );
-    return {
-      tokens: normalized,
-      available: decrypted.available,
-    };
+    return { tokens: normalized, available: true };
   } catch {
     return { tokens: {}, available: true };
   }
@@ -66,7 +60,7 @@ async function loadTokenMap(): Promise<{ tokens: Record<string, HostSecrets>; av
 
 export async function loadHosts(): Promise<HostLike[]> {
   const snapshot = loadHostsSnapshot();
-  const tokenState = await loadTokenMap();
+  const tokenState = loadTokenMap();
   const merged = snapshot.map((host) => ({
     ...host,
     token: tokenState.tokens[host.id]?.token ?? host.token,
@@ -78,7 +72,7 @@ export async function loadHosts(): Promise<HostLike[]> {
   }));
 
   const hasLegacyPlaintext = snapshot.some((host) => typeof host.token === 'string' && host.token.length > 0);
-  if (hasLegacyPlaintext && tokenState.available) {
+  if (hasLegacyPlaintext) {
     await persistHosts(merged);
   }
 
@@ -116,10 +110,6 @@ export async function persistHosts(hosts: HostLike[]): Promise<void> {
     return;
   }
 
-  const encrypted = await encryptJsonDetailed(tokens);
-  if (!encrypted.available) {
-    return;
-  }
-
-  storageSetRaw(HOSTS_TOKENS_STORAGE_KEY, encrypted.value);
+  // Store tokens as plaintext JSON — SDK storage is sandboxed per-app
+  storageSetRaw(HOSTS_TOKENS_STORAGE_KEY, JSON.stringify(tokens));
 }
