@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.6
+
+Released: 2026-04-02
+
+No breaking changes.
+
+### Changed
+
+- aligned the app version with the rest of the current `0.1.6` release train
+- retained the `even-toolkit` 1.6.2 dependency and canonical `open-vide/even-open-vide` release flow
+
+### Notes
+
+- there are no daemon or bridge protocol changes in this release
+
+
 ## 0.1.5
 
 Released: 2026-04-02
