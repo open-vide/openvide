@@ -2,6 +2,7 @@ import type { Host as StoreHost } from '../state/types';
 import type { WebHost } from '../types';
 import { HOSTS_STORAGE_KEY } from './constants';
 import { decryptJsonDetailed, encryptJsonDetailed } from './secure-crypto';
+import { storageSetRaw, storageRemove } from 'even-toolkit/storage';
 
 type HostLike = WebHost | StoreHost;
 type HostSecrets = {
@@ -109,9 +110,9 @@ export async function persistHosts(hosts: HostLike[]): Promise<void> {
       .filter(([, secret]) => Object.keys(secret).length > 0),
   );
 
-  localStorage.setItem(HOSTS_STORAGE_KEY, JSON.stringify(safeHosts));
+  storageSetRaw(HOSTS_STORAGE_KEY, JSON.stringify(safeHosts));
   if (Object.keys(tokens).length === 0) {
-    localStorage.removeItem(HOSTS_TOKENS_STORAGE_KEY);
+    storageRemove(HOSTS_TOKENS_STORAGE_KEY);
     return;
   }
 
@@ -120,5 +121,5 @@ export async function persistHosts(hosts: HostLike[]): Promise<void> {
     return;
   }
 
-  localStorage.setItem(HOSTS_TOKENS_STORAGE_KEY, encrypted.value);
+  storageSetRaw(HOSTS_TOKENS_STORAGE_KEY, encrypted.value);
 }

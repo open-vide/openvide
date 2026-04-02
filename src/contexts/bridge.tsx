@@ -4,6 +4,7 @@ import { setBridgeUrl, setBridgeAuth, onStatusChange, onHostAuthUpdate, disconne
 import { HOSTS_STORAGE_KEY, ACTIVE_HOST_KEY, DEFAULT_POLL_INTERVAL } from '../lib/constants';
 import type { WebHost } from '../types';
 import { loadHosts, loadHostsSnapshot, persistHosts } from '../lib/host-storage';
+import { storageSetRaw, storageRemove } from 'even-toolkit/storage';
 
 interface BridgeContextValue {
   hosts: WebHost[];
@@ -118,7 +119,7 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
       return next;
     });
     if (activeHostIdRef.current === hostId) {
-      localStorage.removeItem(ACTIVE_HOST_KEY);
+      storageRemove(ACTIVE_HOST_KEY);
       setActiveHostId(null);
     }
   }, []);
@@ -134,7 +135,7 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
   const switchHostFn = useCallback((hostId: string) => {
     const host = hostsRef.current.find((h) => h.id === hostId);
     if (!host) return;
-    localStorage.setItem(ACTIVE_HOST_KEY, hostId);
+    storageSetRaw(ACTIVE_HOST_KEY, hostId);
     setActiveHostId(hostId);
     disconnect();
     setBridgeUrl(host.url);

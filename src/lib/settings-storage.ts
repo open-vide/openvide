@@ -1,5 +1,6 @@
 import type { WebSettings } from '../types';
 import { decryptValueDetailed, encryptValueDetailed } from './secure-crypto';
+import { storageSetRaw, storageRemove } from 'even-toolkit/storage';
 
 export const SETTINGS_CACHE_KEY = 'openvide_settings_cache';
 export const SETTINGS_PENDING_KEY = 'openvide_settings_pending';
@@ -49,10 +50,10 @@ export async function writeStoredSettings(
   storageKey: string,
   settings: WebSettings,
 ): Promise<void> {
-  localStorage.setItem(storageKey, JSON.stringify(stripSecrets(settings)));
+  storageSetRaw(storageKey, JSON.stringify(stripSecrets(settings)));
 
   if (!settings.sttApiKey) {
-    localStorage.removeItem(secureStorageKey(storageKey));
+    storageRemove(secureStorageKey(storageKey));
     return;
   }
 
@@ -61,13 +62,13 @@ export async function writeStoredSettings(
     return;
   }
 
-  localStorage.setItem(secureStorageKey(storageKey), encrypted.value);
+  storageSetRaw(secureStorageKey(storageKey), encrypted.value);
 }
 
 export function clearStoredSettings(storageKey: string): void {
   try {
-    localStorage.removeItem(storageKey);
-    localStorage.removeItem(secureStorageKey(storageKey));
+    storageRemove(storageKey);
+    storageRemove(secureStorageKey(storageKey));
   } catch {
     // Ignore storage failures.
   }

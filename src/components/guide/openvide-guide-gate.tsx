@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Dialog } from 'even-toolkit/web';
 import { GUIDE_STORAGE_KEY } from '@/lib/app-meta';
 import { UNTITLED_DIALOG_CLASS } from '@/lib/dialog';
+import { storageSetRaw } from 'even-toolkit/storage';
 import { OpenVideGuide } from './openvide-guide';
 
 export function OpenVideGuideGate() {
@@ -15,7 +16,7 @@ export function OpenVideGuideGate() {
 
   const handleClose = () => {
     try {
-      localStorage.setItem(GUIDE_STORAGE_KEY, '1');
+      storageSetRaw(GUIDE_STORAGE_KEY, '1');
     } catch {
       // Ignore storage failures and close the dialog anyway.
     }

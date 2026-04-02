@@ -3,6 +3,8 @@
  * Allows users to name sessions for easy identification.
  */
 
+import { storageSetRaw } from 'even-toolkit/storage';
+
 const STORAGE_KEY = 'openvide_session_labels';
 
 function loadLabels(): Record<string, string> {
@@ -13,7 +15,7 @@ function loadLabels(): Record<string, string> {
 }
 
 function saveLabels(labels: Record<string, string>): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(labels));
+  storageSetRaw(STORAGE_KEY, JSON.stringify(labels));
 }
 
 export function getSessionLabel(sessionId: string): string | undefined {

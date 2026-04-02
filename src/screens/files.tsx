@@ -8,6 +8,7 @@ import { useBridge } from '../contexts/bridge';
 import { getHostOptions, resolvePreferredHostId } from '../lib/bridge-hosts';
 import { PICKED_PATH_STORAGE_KEY } from '../hooks/use-dialog-draft';
 import { Button, Input, Select, Card, useDrawerHeader } from 'even-toolkit/web';
+import { storageSetRaw } from 'even-toolkit/storage';
 import { IcFeatLearnExplore, IcStatusArchivedFile, IcStatusFile } from 'even-toolkit/web/icons/svg-icons';
 
 type SortMode = 'name' | 'size' | 'modified' | 'type';
@@ -46,7 +47,7 @@ function loadSortPrefs(): { mode: SortMode; dir: SortDir } {
 }
 
 function saveSortPrefs(mode: SortMode, dir: SortDir): void {
-  localStorage.setItem('openvide_file_sort', JSON.stringify({ mode, dir }));
+  storageSetRaw('openvide_file_sort', JSON.stringify({ mode, dir }));
 }
 
 export function FilesRoute() {
