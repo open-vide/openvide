@@ -1,5 +1,5 @@
 import type { WebSettings } from '../types';
-import { storageSetRaw, storageRemove, storageGetRaw } from 'even-toolkit/storage';
+import { storageSetRaw, storageRemove, storageGetRaw } from './bridge-storage';
 
 export const SETTINGS_CACHE_KEY = 'openvide_settings_cache';
 export const SETTINGS_PENDING_KEY = 'openvide_settings_pending';

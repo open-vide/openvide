@@ -8,7 +8,7 @@ import { useBridge } from '../contexts/bridge';
 import { getHostOptions, resolvePreferredHostId } from '../lib/bridge-hosts';
 import { PICKED_PATH_STORAGE_KEY } from '../hooks/use-dialog-draft';
 import { Button, Input, Select, Card, useDrawerHeader } from 'even-toolkit/web';
-import { storageSetRaw, storageGetRaw } from 'even-toolkit/storage';
+import { storageSetRaw, storageGetRaw } from '@/lib/bridge-storage';
 import { IcFeatLearnExplore, IcStatusArchivedFile, IcStatusFile } from 'even-toolkit/web/icons/svg-icons';
 
 type SortMode = 'name' | 'size' | 'modified' | 'type';

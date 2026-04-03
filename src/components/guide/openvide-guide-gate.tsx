@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dialog } from 'even-toolkit/web';
 import { GUIDE_STORAGE_KEY } from '@/lib/app-meta';
 import { UNTITLED_DIALOG_CLASS } from '@/lib/dialog';
-import { storageSetRaw, storageGetRaw } from 'even-toolkit/storage';
+import { storageSetRaw, storageGetRaw } from '@/lib/bridge-storage';
 import { OpenVideGuide } from './openvide-guide';
 
 export function OpenVideGuideGate() {

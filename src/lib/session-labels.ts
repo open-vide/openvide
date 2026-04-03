@@ -3,7 +3,7 @@
  * Allows users to name sessions for easy identification.
  */
 
-import { storageSetRaw, storageGetRaw } from 'even-toolkit/storage';
+import { storageSetRaw, storageGetRaw } from './bridge-storage';
 
 const STORAGE_KEY = 'openvide_session_labels';
 

@@ -4,7 +4,7 @@ import { setBridgeUrl, setBridgeAuth, onStatusChange, onHostAuthUpdate, disconne
 import { HOSTS_STORAGE_KEY, ACTIVE_HOST_KEY, DEFAULT_POLL_INTERVAL } from '../lib/constants';
 import type { WebHost } from '../types';
 import { loadHosts, loadHostsSnapshot, persistHosts } from '../lib/host-storage';
-import { storageSetRaw, storageRemove, storageGetRaw } from 'even-toolkit/storage';
+import { storageSetRaw, storageRemove, storageGetRaw } from '@/lib/bridge-storage';
 
 interface BridgeContextValue {
   hosts: WebHost[];

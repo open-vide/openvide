@@ -1,7 +1,7 @@
 import type { Host as StoreHost } from '../state/types';
 import type { WebHost } from '../types';
 import { HOSTS_STORAGE_KEY } from './constants';
-import { storageSetRaw, storageRemove, storageGetRaw } from 'even-toolkit/storage';
+import { storageSetRaw, storageRemove, storageGetRaw } from './bridge-storage';
 
 type HostLike = WebHost | StoreHost;
 type HostSecrets = {
