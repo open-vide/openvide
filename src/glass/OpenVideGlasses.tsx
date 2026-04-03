@@ -15,6 +15,7 @@ import { useBrowserEntries, useFileContent } from '../hooks/use-file-browser';
 import { startVoiceCapture, stopVoiceCapture } from '../input/voice';
 import type { Store } from '../state/store';
 import type { Action } from '../state/actions';
+import { applySettingsPatch } from '../lib/settings';
 import {
   SETTINGS_CACHE_KEY,
   SETTINGS_PENDING_KEY,
@@ -404,7 +405,12 @@ export function OpenVideGlasses() {
     ensureBridgeForCommand();
 
     const previous = normalizeSettings(queryClient.getQueryData(['settings']) as Partial<typeof defaultSettings> | undefined);
-    const next = normalizeSettings((params?.settings as Partial<typeof defaultSettings> | undefined) ?? previous);
+    const next = normalizeSettings(
+      applySettingsPatch(
+        previous,
+        (params?.settings as Partial<typeof defaultSettings> | undefined) ?? previous,
+      ),
+    );
 
     setGlassSettings(next);
     queryClient.setQueryData(['settings'], next);
@@ -447,22 +453,9 @@ export function OpenVideGlasses() {
     setVoiceText(null);
     navigate(`${VOICE_ROUTE}${location.search}`);
     void (async () => {
-      try {
-        ensureBridgeForCommand();
-        const res = await rpc('settings.get');
-        if (res.ok && res.settings) {
-          const latest = normalizeSettings(res.settings as Partial<typeof defaultSettings>);
-          settingsRef.current = latest;
-          setGlassSettings(latest);
-          queryClient.setQueryData(['settings'], latest);
-        }
-      } catch {
-        // Fall back to the latest in-memory settings snapshot.
-      }
-
       await startVoiceCapture(voiceStoreRef.current);
     })();
-  }, [ensureBridgeForCommand, location.pathname, location.search, navigate, queryClient]);
+  }, [location.pathname, location.search, navigate]);
 
   const stopVoice = useCallback(() => {
     stopVoiceCapture();

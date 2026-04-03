@@ -6,12 +6,17 @@ import { storageSetRaw, storageGetRaw } from 'even-toolkit/storage';
 import { OpenVideGuide } from './openvide-guide';
 
 export function OpenVideGuideGate() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     storageGetRaw(GUIDE_STORAGE_KEY).then((val) => {
-      if (val === '1') setOpen(false);
-    }).catch(() => {});
+      setOpen(val !== '1');
+      setReady(true);
+    }).catch(() => {
+      setOpen(true);
+      setReady(true);
+    });
   }, []);
 
   const handleClose = () => {
@@ -22,6 +27,10 @@ export function OpenVideGuideGate() {
     }
     setOpen(false);
   };
+
+  if (!ready) {
+    return null;
+  }
 
   return (
     <Dialog

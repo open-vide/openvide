@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rpc } from '@/domain/daemon-client';
 import type { WebSettings } from '../types';
 import { useBridge } from '../contexts/bridge';
+import { applySettingsPatch, getDefaultVoiceLanguage } from '../lib/settings';
 import {
   SETTINGS_CACHE_KEY,
   SETTINGS_PENDING_KEY,
@@ -16,7 +17,7 @@ let settingsWriteChain: Promise<WebSettings | null> = Promise.resolve(null);
 
 export const defaultSettings: WebSettings = {
   language: 'en',
-  voiceLang: 'en-US',
+  voiceLang: getDefaultVoiceLanguage('en'),
   showToolDetails: true,
   pollInterval: 2500,
   showHiddenFiles: false,
@@ -69,21 +70,23 @@ export function useSettings() {
   const query = useQuery<WebSettings>({
     queryKey: ['settings'],
     queryFn: async () => {
-      const local = await getLocalSettingsFallback();
+      const pending = await readStoredSettings(SETTINGS_PENDING_KEY, normalizeSettings);
+      const cached = await readStoredSettings(SETTINGS_CACHE_KEY, normalizeSettings);
+      const local = pending ?? cached ?? defaultSettings;
+      const localOverride = pending ?? cached;
       try {
         ensureBridgeForCommand();
         const res = await rpc('settings.get');
         if (res.ok && res.settings) {
           const remote = normalizeSettings(res.settings as Partial<WebSettings>);
-          const pending = await readStoredSettings(SETTINGS_PENDING_KEY, normalizeSettings);
-          const merged = pending ? normalizeSettings({ ...remote, ...pending }) : remote;
+          const merged = localOverride
+            ? normalizeSettings({ ...remote, ...localOverride })
+            : remote;
           await writeStoredSettings(SETTINGS_CACHE_KEY, merged);
           return merged;
         }
       } catch { /* ignore */ }
-      return await readStoredSettings(SETTINGS_PENDING_KEY, normalizeSettings)
-        ?? await readStoredSettings(SETTINGS_CACHE_KEY, normalizeSettings)
-        ?? local;
+      return local;
     },
     staleTime: 30000,
     initialData: defaultSettings,
@@ -119,7 +122,7 @@ export function useUpdateSetting() {
   return useMutation({
     mutationFn: async ({ key, value }: { key: keyof WebSettings; value: any }) => {
       const current = normalizeSettings(queryClient.getQueryData<WebSettings>(['settings']) ?? await getLocalSettingsFallback());
-      const updated = normalizeSettings({ ...current, [key]: value });
+      const updated = normalizeSettings(applySettingsPatch(current, { [key]: value } as Partial<WebSettings>));
       queryClient.setQueryData(['settings'], updated);
       await writeStoredSettings(SETTINGS_CACHE_KEY, updated);
       await writeStoredSettings(SETTINGS_PENDING_KEY, updated);

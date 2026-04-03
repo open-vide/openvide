@@ -5,9 +5,14 @@ import { buildScrollableList, slidingWindowStart } from 'even-toolkit/glass-disp
 import { kvLine } from 'even-toolkit/glass-format';
 import type { OpenVideSnapshot, OpenVideActions } from '../types';
 import { APP_VERSION } from '@/lib/app-meta';
+import { APP_LANGUAGE_IDS, getDefaultVoiceLanguage, VOICE_LANGUAGE_OPTIONS } from '@/lib/settings';
+import { getLanguageName, t, type AppLanguage } from '@/utils/i18n';
 
-const LANGUAGES = ['en', 'it', 'es', 'fr', 'de', 'pt', 'zh', 'ja'];
-const VOICE_LANGS = ['en-US', 'it-IT', 'es-ES', 'fr-FR', 'de-DE', 'pt-BR', 'zh-CN', 'ja-JP'];
+const LANGUAGES = APP_LANGUAGE_IDS;
+const VOICE_LANGS = VOICE_LANGUAGE_OPTIONS.map((entry) => entry.value);
+const VOICE_LANGUAGE_LABELS = Object.fromEntries(
+  VOICE_LANGUAGE_OPTIONS.map((entry) => [entry.value, entry.label]),
+);
 const POLL_VALUES = [1000, 2500, 5000, 10000];
 const EDIT_MODE_BASE = 100;
 
@@ -15,12 +20,13 @@ type SettingsItem = { label: string; value: string; key: string; editable?: bool
 
 function getSettingsItems(snap: OpenVideSnapshot): SettingsItem[] {
   const s = snap.settings;
+  const lang = s.language as AppLanguage;
   return [
-    { label: 'Language', value: s.language.toUpperCase(), key: 'language', editable: true },
-    { label: 'Voice', value: s.voiceLang, key: 'voiceLang', editable: true },
-    { label: 'Tool Details', value: s.showToolDetails ? 'ON' : 'OFF', key: 'showToolDetails', editable: true },
-    { label: 'Poll Interval', value: `${s.pollInterval / 1000}s`, key: 'pollInterval', editable: true },
-    { label: 'Hidden Files', value: s.showHiddenFiles ? 'SHOW' : 'HIDE', key: 'showHiddenFiles', editable: true },
+    { label: t('settings.language', lang), value: getLanguageName(lang), key: 'language', editable: true },
+    { label: t('settings.voice', lang), value: VOICE_LANGUAGE_LABELS[s.voiceLang] ?? s.voiceLang, key: 'voiceLang', editable: true },
+    { label: t('settings.toolDetails', lang), value: s.showToolDetails ? t('settings.on', lang) : t('settings.off', lang), key: 'showToolDetails', editable: true },
+    { label: t('settings.poll', lang), value: `${s.pollInterval / 1000}s`, key: 'pollInterval', editable: true },
+    { label: t('settings.hiddenFiles', lang), value: s.showHiddenFiles ? t('settings.show', lang) : t('settings.hide', lang), key: 'showHiddenFiles', editable: true },
   ];
 }
 
@@ -50,6 +56,7 @@ function cycleSettingValue(settings: any, key: string, direction: 'up' | 'down')
       const idx = LANGUAGES.indexOf(s.language);
       const next = ((idx >= 0 ? idx : 0) + delta + LANGUAGES.length) % LANGUAGES.length;
       s.language = LANGUAGES[next];
+      s.voiceLang = getDefaultVoiceLanguage(s.language);
       break;
     }
     case 'voiceLang': {
@@ -76,10 +83,16 @@ function cycleSettingValue(settings: any, key: string, direction: 'up' | 'down')
 
 export const settingsScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = {
   display: (snap, nav) => {
+    const lang = snap.settings.language as AppLanguage;
     const items = getSettingsItems(snap);
     const editing = isEditingValue(nav.highlightedIndex);
     const selectedRow = editing ? decodeEditingRow(nav.highlightedIndex) : nav.highlightedIndex;
-    const lines = [...compactHeader(editing ? 'SETTINGS · EDIT' : 'SETTINGS', `v${APP_VERSION}`)];
+    const lines = [
+      ...compactHeader(
+        editing ? `${t('settings.title', lang)} · EDIT` : t('settings.title', lang),
+        `v${APP_VERSION}`,
+      ),
+    ];
 
     if (editing) {
       const start = slidingWindowStart(selectedRow, items.length, 8);

@@ -5,24 +5,15 @@ import { useBridge } from '../contexts/bridge';
 import { useSessions } from '../hooks/use-sessions';
 import { useBridgeConfig, useUpdateBridgeConfig } from '../hooks/use-bridge-config';
 import { useSettings, useUpdateSetting } from '../hooks/use-settings';
+import { useTranslation } from '../hooks/useTranslation';
 import { isScheduledSession, isTeamSession } from '../lib/session-filters';
 import { APP_VERSION } from '../lib/app-meta';
 import { StatusDot } from '../components/shared/status-dot';
 import { Card, Select, Toggle, Input, Button, ConfirmDialog, useDrawerHeader } from 'even-toolkit/web';
 import { IcEditTrash } from 'even-toolkit/web/icons/svg-icons';
 import { APP_LANGUAGES } from '../utils/i18n';
+import { VOICE_LANGUAGE_OPTIONS } from '../lib/settings';
 import { rpc } from '@/domain/daemon-client';
-
-const VOICE_LANGS = [
-  { value: 'en-US', label: 'English' },
-  { value: 'it-IT', label: 'Italiano' },
-  { value: 'es-ES', label: 'Español' },
-  { value: 'fr-FR', label: 'Français' },
-  { value: 'de-DE', label: 'Deutsch' },
-  { value: 'pt-BR', label: 'Português' },
-  { value: 'zh-CN', label: '中文' },
-  { value: 'ja-JP', label: '日本語' },
-];
 
 const STT_PROVIDERS = [
   { value: 'whisper-api', label: 'Whisper API' },
@@ -61,6 +52,7 @@ export function SettingsRoute() {
   const navigate = useNavigate();
   const { connectionStatus, hosts, activeHostId } = useBridge();
   const { data: settings } = useSettings();
+  const { t } = useTranslation();
   const { data: bridgeConfig, error: bridgeConfigError } = useBridgeConfig();
   const { data: sessions = [] } = useSessions();
   const queryClient = useQueryClient();
@@ -70,7 +62,7 @@ export function SettingsRoute() {
   const [bridgeCwdDraft, setBridgeCwdDraft] = useState('');
 
   useDrawerHeader({
-    title: 'Settings',
+    title: t('web.settings'),
     right: <span className="data-mono text-[11px] text-text-dim">v{APP_VERSION}</span>,
   });
 
@@ -133,30 +125,30 @@ export function SettingsRoute() {
             </div>
             <div className="flex-1">
               <span className="text-[15px] tracking-[-0.15px] text-text font-normal">
-                {isConnected ? 'Connected' : 'Disconnected'}
+                {isConnected ? t('web.connected') : t('web.disconnected')}
               </span>
-              <p className="data-mono">{connectedHosts} host{connectedHosts !== 1 ? 's' : ''} configured</p>
+              <p className="data-mono">{connectedHosts} {connectedHosts === 1 ? t('web.host') : t('web.hosts')} configured</p>
             </div>
             <span className="data-mono">v{APP_VERSION}</span>
           </div>
         </Card>
 
-        <SectionLabel>Guide</SectionLabel>
+        <SectionLabel>{t('web.guide')}</SectionLabel>
         <Card className="mb-4">
           <SettingRow
-            label="OpenVide Guide"
+            label={t('guide.title')}
             description="Setup, bridge pairing, host selection, and external links"
           >
             <Button size="sm" variant="secondary" onClick={() => navigate('/guide')}>
-              Open
+              {t('web.open')}
             </Button>
           </SettingRow>
         </Card>
 
         {/* Language & Voice */}
-        <SectionLabel>Language &amp; Voice</SectionLabel>
+        <SectionLabel>{t('settings.language')} &amp; {t('settings.voice')}</SectionLabel>
         <Card className="mb-4">
-          <SettingRow label="App Language">
+          <SettingRow label={t('settings.language')}>
             <Select
               value={settings?.language ?? 'en'}
               options={APP_LANGUAGES.map((l) => ({ value: l.id, label: l.name }))}
@@ -164,10 +156,10 @@ export function SettingsRoute() {
               className="w-[130px]"
             />
           </SettingRow>
-          <SettingRow label="Voice Language">
+          <SettingRow label={t('settings.voice')}>
             <Select
               value={settings?.voiceLang ?? 'en-US'}
-              options={VOICE_LANGS}
+              options={VOICE_LANGUAGE_OPTIONS as unknown as Array<{ value: string; label: string }>}
               onValueChange={(v) => updateSetting.mutate({ key: 'voiceLang', value: v })}
               className="w-[130px]"
             />
@@ -296,15 +288,15 @@ export function SettingsRoute() {
         </Card>
 
         {/* Display */}
-        <SectionLabel>Display</SectionLabel>
+        <SectionLabel>{t('web.display')}</SectionLabel>
         <Card className="mb-4">
-          <SettingRow label="Tool details" description="Show file edits, commands, and tool calls inline">
+          <SettingRow label={t('settings.toolDetails')} description="Show file edits, commands, and tool calls inline">
             <Toggle
               checked={settings?.showToolDetails ?? true}
               onChange={(v) => updateSetting.mutate({ key: 'showToolDetails', value: v })}
             />
           </SettingRow>
-          <SettingRow label="Hidden files" description="Show dotfiles in file browser">
+          <SettingRow label={t('settings.hiddenFiles')} description="Show dotfiles in file browser">
             <Toggle
               checked={settings?.showHiddenFiles ?? false}
               onChange={(v) => updateSetting.mutate({ key: 'showHiddenFiles', value: v })}
@@ -315,7 +307,7 @@ export function SettingsRoute() {
         {/* Performance */}
         <SectionLabel>Performance</SectionLabel>
         <Card className="mb-4">
-          <SettingRow label="Poll interval" description="How often to check for session updates">
+          <SettingRow label={t('settings.poll')} description="How often to check for session updates">
             <Select
               value={String(settings?.pollInterval ?? 2500)}
               options={POLL_OPTIONS}
@@ -328,12 +320,12 @@ export function SettingsRoute() {
         {/* Danger zone */}
         <SectionLabel>Danger Zone</SectionLabel>
         <Card>
-          <SettingRow label="Clear interactive sessions" description="Remove non-team, non-scheduled daemon sessions from the active host">
+          <SettingRow label={t('settings.clearSessions')} description="Remove non-team, non-scheduled daemon sessions from the active host">
             <button
               type="button"
               className="w-9 h-9 rounded-[6px] bg-negative text-white flex items-center justify-center cursor-pointer border-none hover:opacity-90 transition-opacity press-spring"
               onClick={() => setShowClearConfirm(true)}
-              title="Clear interactive sessions"
+              title={t('settings.clearSessions')}
             >
               <IcEditTrash width={16} height={16} />
             </button>
@@ -346,9 +338,9 @@ export function SettingsRoute() {
         open={showClearConfirm}
         onClose={() => setShowClearConfirm(false)}
         onConfirm={() => { void handleClearSessions(); }}
-        title="Clear interactive sessions?"
+        title={`${t('settings.clearSessions')}?`}
         description="This removes normal daemon sessions on the active host. Team and scheduled sessions are left untouched."
-        confirmLabel="Clear"
+        confirmLabel={t('web.clear')}
         variant="danger"
       />
     </div>

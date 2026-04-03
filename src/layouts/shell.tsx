@@ -11,40 +11,27 @@ import {
   IcStatusFile,
   IcFeatLearnExplore,
 } from 'even-toolkit/web/icons/svg-icons';
+import { useTranslation } from '../hooks/useTranslation';
 
 const iconProps = { width: 18, height: 18, className: 'text-current' };
 
-const MENU_ITEMS: SideDrawerItem[] = [
-  { id: '/', label: 'Workspaces', section: 'Navigation', icon: <IcMenuHome {...iconProps} /> },
-  { id: '/sessions', label: 'Sessions', section: 'Navigation', icon: <IcEditChecklist {...iconProps} /> },
-  { id: '/teams', label: 'Teams', section: 'Navigation', icon: <IcFeatAccount {...iconProps} /> },
-  { id: '/hosts', label: 'Hosts', section: 'Navigation', icon: <IcStatusDisconnected {...iconProps} /> },
-  { id: '/schedules', label: 'Schedules', section: 'Tools', icon: <IcFeatTimeCounting {...iconProps} /> },
-  { id: '/files?source=drawer', label: 'Files', section: 'Tools', icon: <IcStatusFile {...iconProps} /> },
-];
-
-const BOTTOM_ITEMS: SideDrawerItem[] = [
-  { id: '/guide', label: 'Guide', icon: <IcFeatLearnExplore {...iconProps} /> },
-  { id: '/settings', label: 'Settings', icon: <IcEditSettings {...iconProps} /> },
-];
-
-function getPageTitle(pathname: string): string {
+function getPageTitle(pathname: string, t: (key: string) => string): string {
   if (pathname === '/') return 'OpenVide';
-  if (pathname.startsWith('/workspace')) return 'Workspace';
-  if (pathname.startsWith('/sessions')) return 'Sessions';
-  if (pathname.startsWith('/team-chat')) return 'Team Chat';
-  if (pathname.startsWith('/teams')) return 'Teams';
-  if (pathname.startsWith('/team')) return 'Team';
-  if (pathname.startsWith('/hosts')) return 'Hosts';
-  if (pathname.startsWith('/host')) return 'Host';
-  if (pathname.startsWith('/chat')) return 'Chat';
-  if (pathname.startsWith('/settings')) return 'Settings';
-  if (pathname.startsWith('/guide')) return 'Guide';
-  if (pathname.startsWith('/schedules')) return 'Schedules';
-  if (pathname.startsWith('/files')) return 'Files';
-  if (pathname.startsWith('/diffs')) return 'Diffs';
-  if (pathname.startsWith('/ports')) return 'Ports';
-  if (pathname.startsWith('/prompts')) return 'Prompts';
+  if (pathname.startsWith('/workspace')) return t('web.workspace');
+  if (pathname.startsWith('/sessions')) return t('web.sessions');
+  if (pathname.startsWith('/team-chat')) return t('web.teamChat');
+  if (pathname.startsWith('/teams')) return t('web.teams');
+  if (pathname.startsWith('/team')) return t('web.team');
+  if (pathname.startsWith('/hosts')) return t('web.hosts');
+  if (pathname.startsWith('/host')) return t('web.host');
+  if (pathname.startsWith('/chat')) return t('web.chat');
+  if (pathname.startsWith('/settings')) return t('web.settings');
+  if (pathname.startsWith('/guide')) return t('web.guide');
+  if (pathname.startsWith('/schedules')) return t('web.schedules');
+  if (pathname.startsWith('/files')) return t('web.files');
+  if (pathname.startsWith('/diffs')) return t('web.diffs');
+  if (pathname.startsWith('/ports')) return t('web.ports');
+  if (pathname.startsWith('/prompts')) return t('web.prompts');
   return 'OpenVide';
 }
 
@@ -62,15 +49,28 @@ function deriveActiveId(pathname: string): string {
 
 export function Shell() {
   const location = useLocation();
+  const { t } = useTranslation();
   const activeId = deriveActiveId(location.pathname);
-  const pageTitlePrefix = [...MENU_ITEMS, ...BOTTOM_ITEMS].find((item) => item.id === activeId)?.icon;
+  const menuItems: SideDrawerItem[] = [
+    { id: '/', label: t('web.workspaces'), section: 'Navigation', icon: <IcMenuHome {...iconProps} /> },
+    { id: '/sessions', label: t('web.sessions'), section: 'Navigation', icon: <IcEditChecklist {...iconProps} /> },
+    { id: '/teams', label: t('web.teams'), section: 'Navigation', icon: <IcFeatAccount {...iconProps} /> },
+    { id: '/hosts', label: t('web.hosts'), section: 'Navigation', icon: <IcStatusDisconnected {...iconProps} /> },
+    { id: '/schedules', label: t('web.schedules'), section: 'Tools', icon: <IcFeatTimeCounting {...iconProps} /> },
+    { id: '/files?source=drawer', label: t('web.files'), section: 'Tools', icon: <IcStatusFile {...iconProps} /> },
+  ];
+  const bottomItems: SideDrawerItem[] = [
+    { id: '/guide', label: t('web.guide'), icon: <IcFeatLearnExplore {...iconProps} /> },
+    { id: '/settings', label: t('web.settings'), icon: <IcEditSettings {...iconProps} /> },
+  ];
+  const pageTitlePrefix = [...menuItems, ...bottomItems].find((item) => item.id === activeId)?.icon;
 
   return (
     <DrawerShell
-      items={MENU_ITEMS}
-      bottomItems={BOTTOM_ITEMS}
+      items={menuItems}
+      bottomItems={bottomItems}
       title="OpenVide"
-      getPageTitle={getPageTitle}
+      getPageTitle={(pathname) => getPageTitle(pathname, t)}
       deriveActiveId={deriveActiveId}
       pageTitlePrefix={pageTitlePrefix}
       className="openvide-shell"
