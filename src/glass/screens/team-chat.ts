@@ -12,7 +12,7 @@ export const teamChatScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = {
     const headerLines = compactHeader(fieldJoin(teamName.toUpperCase(), 'Chat'));
 
     if (snap.teamMessages.length === 0) {
-      return { lines: [...headerLines, line('  No messages', 'meta')] };
+      return { lines: [...headerLines, line('No messages', 'meta')] };
     }
 
     const contentLines: string[] = [];

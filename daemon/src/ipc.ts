@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS: DaemonSettings = {
   showToolDetails: true,
   pollInterval: 2500,
   showHiddenFiles: false,
-  sttProvider: "whisper-api",
+  sttProvider: "soniox",
   sttApiKey: "",
 };
 
@@ -125,8 +125,8 @@ function persistSharedState(): void {
   sm.persist();
 }
 
-function normalizeSttProvider(provider?: string | null): DaemonSettings["sttProvider"] {
-  return provider === "deepgram" ? "deepgram" : "whisper-api";
+function normalizeSttProvider(_provider?: string | null): DaemonSettings["sttProvider"] {
+  return "soniox";
 }
 
 function normalizeSettings(settings?: Partial<DaemonSettings> | null): DaemonSettings {

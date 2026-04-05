@@ -48,14 +48,14 @@ export const fileBrowserScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> =
         maxVisible: 8,
         formatter: (item) => {
           if (item.kind === 'host') {
-            return ` ${fieldJoin('HOST', truncate(hostLabel, 20))} ${DRILL}`;
+            return `${fieldJoin('HOST', truncate(hostLabel, 20))} ${DRILL}`;
           }
-          if (item.kind === 'up') return ' ..';
+          if (item.kind === 'up') return '..';
           const entry = item.entry;
-          if (entry.type === 'dir') return ` ${drillLabel(entry.name + '/')}`;
+          if (entry.type === 'dir') return drillLabel(entry.name + '/');
           const sizeStr = formatSize(entry.size);
           const name = truncate(entry.name, 32);
-          return ` ${name} ${SEP} ${sizeStr}`;
+          return `${name} ${SEP} ${sizeStr}`;
         },
       }),
     ];

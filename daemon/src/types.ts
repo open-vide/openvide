@@ -85,7 +85,7 @@ export interface DaemonSettings {
   showToolDetails: boolean;
   pollInterval: number;
   showHiddenFiles: boolean;
-  sttProvider: "whisper-api" | "deepgram";
+  sttProvider: "soniox";
   sttApiKey: string;
 }
 

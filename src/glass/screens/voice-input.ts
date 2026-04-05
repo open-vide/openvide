@@ -18,9 +18,9 @@ export const voiceInputScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
     ];
 
     if (snap.voiceListening) {
-      lines.push(line('  Listening...', 'meta'));
+      lines.push(line('Listening...', 'meta'));
     } else {
-      lines.push(line(snap.voiceText ? '  Ready to send' : '  Processing...', 'meta'));
+      lines.push(line(snap.voiceText ? 'Ready to send' : 'Processing...', 'meta'));
     }
 
     lines.push(line(''));
@@ -31,13 +31,13 @@ export const voiceInputScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
       let current = '';
       for (const word of words) {
         if (current.length + word.length + 1 > 38) {
-          lines.push(line(`  ${current}`));
+          lines.push(line(current));
           current = word;
         } else {
           current = current ? `${current} ${word}` : word;
         }
       }
-      if (current) lines.push(line(`  ${current}`));
+      if (current) lines.push(line(current));
     }
 
     return { lines };

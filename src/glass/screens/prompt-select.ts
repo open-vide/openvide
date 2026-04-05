@@ -23,8 +23,8 @@ export const promptSelectScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> 
         highlightedIndex: nav.highlightedIndex,
         maxVisible: 8,
         formatter: (p) => {
-          if (p.id === '__voice__') return ' Voice Input';
-          return ` ${drillLabel(truncate(p.label, 40))}`;
+          if (p.id === '__voice__') return 'Voice Input';
+          return drillLabel(truncate(p.label, 40));
         },
       }),
     ];

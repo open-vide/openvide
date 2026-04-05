@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useSTT } from 'even-toolkit/stt/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { useBridge } from '../contexts/bridge';
@@ -15,10 +16,6 @@ import { APP_LANGUAGES } from '../utils/i18n';
 import { VOICE_LANGUAGE_OPTIONS } from '../lib/settings';
 import { rpc } from '@/domain/daemon-client';
 
-const STT_PROVIDERS = [
-  { value: 'whisper-api', label: 'Whisper API' },
-  { value: 'deepgram', label: 'Deepgram' },
-];
 
 const POLL_OPTIONS = [
   { value: '1000', label: '1s' },
@@ -44,6 +41,71 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <div className="flex items-center gap-2 mb-1.5 mt-2">
       <span className="text-[11px] tracking-[-0.11px] text-text-dim font-normal uppercase">{children}</span>
       <div className="flex-1 h-[1px] bg-border" />
+    </div>
+  );
+}
+
+function STTTestSection({ apiKey, language }: { apiKey: string; language: string }) {
+  const [testing, setTesting] = useState(false);
+  const { transcript, interimTranscript, isListening, isLoading, error, state, start, stop, reset } = useSTT({
+    provider: 'soniox',
+    language,
+    apiKey,
+  });
+
+  const handleToggle = useCallback(async () => {
+    if (isListening) {
+      stop();
+      setTesting(false);
+    } else {
+      reset();
+      setTesting(true);
+      await start();
+    }
+  }, [isListening, start, stop, reset]);
+
+  if (!apiKey) return null;
+
+  return (
+    <div className="py-3 border-t border-border">
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <span className="text-[13px] tracking-[-0.13px] text-text font-normal">Test STT</span>
+          <p className="text-[11px] tracking-[-0.11px] text-text-dim mt-0.5">
+            {state === 'idle' && !testing ? 'Tap to test voice recognition' :
+             state === 'loading' || isLoading ? 'Connecting...' :
+             isListening ? 'Listening — speak now' :
+             state === 'processing' ? 'Processing...' :
+             'Done'}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant={isListening ? 'danger' : 'default'}
+          onClick={handleToggle}
+          disabled={isLoading || state === 'processing'}
+        >
+          {isListening ? 'Stop' : testing ? 'Restart' : 'Test'}
+        </Button>
+      </div>
+      {isListening && (
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-2 h-2 rounded-full bg-negative animate-pulse shrink-0" />
+          <span className="text-[11px] tracking-[-0.11px] text-negative font-normal">Recording</span>
+        </div>
+      )}
+      {(interimTranscript || transcript) && (
+        <div className="rounded-[6px] bg-bg p-3 mt-1">
+          <p className="text-[13px] tracking-[-0.13px] text-text font-normal whitespace-pre-wrap">
+            {interimTranscript || transcript || '...'}
+          </p>
+        </div>
+      )}
+      {error && (
+        <p className="text-[11px] tracking-[-0.11px] text-negative mt-1.5 font-normal">
+          {error.message}
+        </p>
+      )}
     </div>
   );
 }
@@ -165,23 +227,19 @@ export function SettingsRoute() {
             />
           </SettingRow>
           <SettingRow label="STT Engine" description="Speech-to-text provider for voice input">
-            <Select
-              value={settings?.sttProvider ?? 'whisper-api'}
-              options={STT_PROVIDERS}
-              onValueChange={(v) => updateSetting.mutate({ key: 'sttProvider' as any, value: v })}
-              className="w-[130px]"
-            />
+            <span className="text-[13px] tracking-[-0.13px] text-text font-normal">Soniox</span>
           </SettingRow>
           <div className="py-3">
-            <span className="text-[11px] tracking-[-0.11px] text-text-dim font-normal">API Key</span>
+            <span className="text-[11px] tracking-[-0.11px] text-text-dim font-normal">Soniox API Key</span>
             <Input
               type="password"
               value={settings?.sttApiKey ?? ''}
               onChange={(e) => updateSetting.mutate({ key: 'sttApiKey' as any, value: e.target.value })}
-              placeholder="Enter provider API key"
+              placeholder="Enter Soniox API key"
               className="mt-1"
             />
           </div>
+          <STTTestSection apiKey={settings?.sttApiKey ?? ''} language={settings?.voiceLang ?? 'en-US'} />
         </Card>
 
         {/* Even AI bridge */}
@@ -213,6 +271,7 @@ export function SettingsRoute() {
                 { value: 'claude', label: 'Claude' },
                 { value: 'codex', label: 'Codex' },
               ]}
+              disabled={!isConnected}
               onValueChange={(value) => updateBridgeConfig.mutate({ evenAiTool: value as 'claude' | 'codex' })}
               className="w-[130px]"
             />
@@ -228,6 +287,7 @@ export function SettingsRoute() {
                 { value: 'new', label: 'Always New' },
                 { value: 'pinned', label: 'Pinned Session' },
               ]}
+              disabled={!isConnected}
               onValueChange={(value) => updateBridgeConfig.mutate({ evenAiMode: value as 'last' | 'new' | 'pinned' })}
               className="w-[150px]"
             />
@@ -243,6 +303,7 @@ export function SettingsRoute() {
                   { value: '', label: pinnedSessionOptions.length ? 'Select session' : 'No sessions available' },
                   ...pinnedSessionOptions,
                 ]}
+                disabled={!isConnected}
                 onValueChange={(value) => updateBridgeConfig.mutate({ evenAiPinnedSessionId: value })}
                 className="w-[220px]"
               />
@@ -346,3 +407,4 @@ export function SettingsRoute() {
     </div>
   );
 }
+

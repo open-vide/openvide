@@ -13,7 +13,7 @@ export const actionResultScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> 
       return {
         lines: [
           ...compactHeader('RESULT'),
-          line('  No result', 'meta'),
+          line('No result', 'meta'),
           line(''),
           line(' Continue', undefined, true),
         ],
@@ -23,11 +23,11 @@ export const actionResultScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> 
     const lines = [
       ...compactHeader('RESULT'),
       line(''),
-      line(` ${result.action.toUpperCase()} ${DASH} ${result.success ? 'OK' : 'FAILED'}`),
+      line(`${result.action.toUpperCase()} ${DASH} ${result.success ? 'OK' : 'FAILED'}`),
       line(''),
-      line(`  "${truncate(result.message, 38)}"`),
+      line(`"${truncate(result.message, 38)}"`),
       line(''),
-      line(' Continue', undefined, true),
+      line('Continue', undefined, true),
     ];
 
     return { lines };

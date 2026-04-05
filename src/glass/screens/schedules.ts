@@ -14,7 +14,7 @@ export const schedulesScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = {
     ];
 
     if (count === 0) {
-      lines.push(line('  No scheduled tasks', 'meta'));
+      lines.push(line('No scheduled tasks', 'meta'));
       return { lines };
     }
 
@@ -31,7 +31,7 @@ export const schedulesScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = {
               : task.enabled
                 ? 'ON'
                 : 'OFF';
-          return ` ${fieldJoin(truncate(task.name, 14), truncate(status, 3), truncate(task.schedule, 10))}`;
+          return fieldJoin(truncate(task.name, 14), truncate(status, 3), truncate(task.schedule, 10));
         },
       }),
     );

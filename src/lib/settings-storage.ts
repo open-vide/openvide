@@ -35,7 +35,6 @@ export async function writeStoredSettings(
   storageKey: string,
   settings: WebSettings,
 ): Promise<void> {
-  // Store everything in plaintext — SDK storage is sandboxed per-app
   await storageSetRaw(storageKey, JSON.stringify(settings));
 }
 

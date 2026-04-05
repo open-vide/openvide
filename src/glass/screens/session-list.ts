@@ -26,7 +26,7 @@ export const sessionListScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> =
     const lines = [...compactHeader(fieldJoin(...headerParts))];
 
     if (count === 0) {
-      lines.push(line('  No sessions', 'meta'));
+      lines.push(line('No sessions', 'meta'));
       return { lines };
     }
 
@@ -39,7 +39,7 @@ export const sessionListScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> =
         const st = s.status === 'running' ? 'run' : s.status.slice(0, 4);
         const dir = s.workingDirectory.split('/').pop() ?? '';
         const model = s.model ? truncate(s.model, 8) : '';
-        return ` ${fieldJoin(tool, st, truncate(dir, 18), model)} ${DRILL}`;
+        return `${fieldJoin(tool, st, truncate(dir, 18), model)} ${DRILL}`;
       },
     }));
 

@@ -55,7 +55,7 @@ export const homeScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = {
         items: menuItems,
         highlightedIndex: nav.highlightedIndex,
         maxVisible: 8,
-        formatter: (item) => drillLabel(` ${item.info}`),
+        formatter: (item) => drillLabel(item.info),
       }),
     ];
 

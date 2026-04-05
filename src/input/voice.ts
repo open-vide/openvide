@@ -9,8 +9,8 @@ let activeStore: Store | null = null;
 let committedTranscript = '';
 let interimTranscript = '';
 
-function normalizeProvider(provider?: string | null): 'whisper-api' | 'deepgram' {
-  return provider === 'deepgram' ? 'deepgram' : 'whisper-api';
+function normalizeProvider(_provider?: string | null): 'soniox' {
+  return 'soniox';
 }
 
 function normalizeTranscriptText(text?: string | null): string {

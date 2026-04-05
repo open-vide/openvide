@@ -14,7 +14,7 @@ export const teamListScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = {
     const lines = [...compactHeader(fieldJoin('TEAMS', `${count}`, totalMembers > 0 ? `${totalMembers} members` : undefined))];
 
     if (count === 0) {
-      lines.push(line('  No teams', 'meta'));
+      lines.push(line('No teams', 'meta'));
       return { lines };
     }
 
@@ -28,7 +28,7 @@ export const teamListScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = {
         const parts = [truncate(team.name, 24)];
         if (members > 0) parts.push(`${members} members`);
         if (tasks > 0) parts.push(`${tasks} tasks`);
-        return ` ${drillLabel(fieldJoin(...parts))}`;
+        return drillLabel(fieldJoin(...parts));
       },
     }));
 

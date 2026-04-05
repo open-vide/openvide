@@ -7,7 +7,7 @@ const appRoot = resolve(__dirname)
 const nm = (pkg: string) => resolve(appRoot, 'node_modules', pkg)
 
 const EVEN_GLASS_DIR = resolve(appRoot, '../even-glass')
-const SDK_DIR = resolve(appRoot, '../even-dev/node_modules/@evenrealities/even_hub_sdk')
+const SDK_DIR = resolve(appRoot, 'node_modules/@evenrealities/even_hub_sdk')
 
 export default [
   react(),

@@ -39,7 +39,7 @@ export const sessionDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideActions>
       return {
         lines: [
           ...compactHeader('SESSION'),
-          line('  Session not found', 'meta'),
+          line('Session not found', 'meta'),
         ],
       };
     }
@@ -50,9 +50,9 @@ export const sessionDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideActions>
 
     const dirName = session.workingDirectory.split('/').pop() ?? '';
     const model = session.model ?? '';
-    if (dirName || model) lines.push(line(`  ${fieldJoin(dirName, model)}`, 'meta'));
+    if (dirName || model) lines.push(line(fieldJoin(dirName, model), 'meta'));
     if (session.lastPrompt) {
-      lines.push(line(`  "${truncate(session.lastPrompt, 38)}"`, 'meta'));
+      lines.push(line(`"${truncate(session.lastPrompt, 38)}"`, 'meta'));
     }
 
     lines.push(separator());
@@ -62,7 +62,7 @@ export const sessionDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideActions>
       items: actions,
       highlightedIndex: nav.highlightedIndex,
       maxVisible: 4,
-      formatter: (a) => a.path ? drillLabel(` ${a.label}`) : ` ${a.label}`,
+      formatter: (a) => a.path ? drillLabel(a.label) : a.label,
     }));
 
     return { lines };

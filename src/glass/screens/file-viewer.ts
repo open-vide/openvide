@@ -10,7 +10,7 @@ export const fileViewerScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
     const fileName = snap.browserPath.split('/').pop() ?? 'file';
     const contentLines = snap.outputLines.length > 0
       ? snap.outputLines
-      : [`  ${truncate(snap.browserPath, 40)}`, '', '  Use web UI for full file view'];
+      : [truncate(snap.browserPath, 40), '', 'Use web UI for full file view'];
 
     const headerLines = compactHeader(fieldJoin('FILE', truncate(fileName, 28)));
     const contentSlots = 8; // 10 - 2 (title + separator)

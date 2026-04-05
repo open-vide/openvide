@@ -11,7 +11,7 @@ const defaultSettings: Settings = {
   showToolDetails: true,
   pollInterval: 2500,
   showHiddenFiles: false,
-  sttProvider: 'whisper-api',
+  sttProvider: 'soniox',
   sttApiKey: '',
 };
 

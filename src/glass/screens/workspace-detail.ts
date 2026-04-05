@@ -14,7 +14,7 @@ export const workspaceDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideAction
     const lines = [...compactHeader(fieldJoin('WORKSPACES', `${count}`, totalRunning > 0 ? `${totalRunning} run` : undefined))];
 
     if (count === 0) {
-      lines.push(line('  No workspaces', 'meta'));
+      lines.push(line('No workspaces', 'meta'));
       return { lines };
     }
 
@@ -27,7 +27,7 @@ export const workspaceDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideAction
         const parts = [truncate(ws.name, 22), `${ws.sessionCount} ses`];
         if (ws.runningCount > 0) parts.push(`${ws.runningCount} run`);
         if (idleCount > 0) parts.push(`${idleCount} idle`);
-        return ` ${fieldJoin(...parts)} ${DRILL}`;
+        return `${fieldJoin(...parts)} ${DRILL}`;
       },
     }));
 

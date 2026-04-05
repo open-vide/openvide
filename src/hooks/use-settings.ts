@@ -21,12 +21,12 @@ export const defaultSettings: WebSettings = {
   showToolDetails: true,
   pollInterval: 2500,
   showHiddenFiles: false,
-  sttProvider: 'whisper-api',
+  sttProvider: 'soniox',
   sttApiKey: '',
 };
 
-function normalizeSttProvider(provider?: string | null): WebSettings['sttProvider'] {
-  return provider === 'deepgram' ? 'deepgram' : 'whisper-api';
+function normalizeSttProvider(_provider?: string | null): WebSettings['sttProvider'] {
+  return 'soniox';
 }
 
 export function normalizeSettings(settings?: Partial<WebSettings> | null): WebSettings {
@@ -89,7 +89,6 @@ export function useSettings() {
       return local;
     },
     staleTime: 30000,
-    initialData: defaultSettings,
   });
 
   useEffect(() => {

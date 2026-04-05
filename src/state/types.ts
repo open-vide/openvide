@@ -78,7 +78,7 @@ export interface Settings {
   showToolDetails: boolean;  // default true
   pollInterval: number;      // ms, default 2500
   showHiddenFiles: boolean;  // default false
-  sttProvider: 'whisper-api' | 'deepgram';
+  sttProvider: 'soniox';
   sttApiKey: string;
 }
 

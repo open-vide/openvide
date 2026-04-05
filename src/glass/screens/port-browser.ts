@@ -15,7 +15,7 @@ export const portBrowserScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> =
     ];
 
     if (count === 0) {
-      lines.push(line('  No open ports', 'meta'));
+      lines.push(line('No open ports', 'meta'));
       return { lines };
     }
 
@@ -25,7 +25,7 @@ export const portBrowserScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> =
         highlightedIndex: nav.highlightedIndex,
         maxVisible: 8,
         formatter: (p) => {
-          return ` :${p.port} ${SEP} ${p.process}`;
+          return `:${p.port} ${SEP} ${p.process}`;
         },
       }),
     );

@@ -14,7 +14,7 @@ export const hostListScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = {
     const lines = [...compactHeader(fieldJoin('HOSTS', `${connected} on`, `${count} total`))];
 
     if (count === 0) {
-      lines.push(line('  No hosts configured', 'meta'));
+      lines.push(line('No hosts configured', 'meta'));
       return { lines };
     }
 
@@ -27,7 +27,7 @@ export const hostListScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = {
         const tag = st === 'connected' ? 'on' : 'off';
         const hostSessions = snap.sessions.filter(s => s.hostId === h.id).length;
         const sesInfo = hostSessions > 0 ? `${hostSessions} ses` : undefined;
-        return ` ${fieldJoin(truncate(h.name, 24), tag, sesInfo)} ${DRILL}`;
+        return `${fieldJoin(truncate(h.name, 24), tag, sesInfo)} ${DRILL}`;
       },
     }));
 

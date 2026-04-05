@@ -546,7 +546,7 @@ export function OpenVideGlasses() {
     onGlassAction: handleAction,
     deriveScreen,
     appName: 'OPENVIDE',
-    getPageMode: () => 'text',
+    getPageMode: (screen) => (screen === 'home' ? 'home' : 'text'),
   });
 
   return null;

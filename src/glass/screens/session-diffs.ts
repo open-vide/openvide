@@ -18,7 +18,7 @@ export const sessionDiffsScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> 
     ];
 
     if (count === 0) {
-      lines.push(line('  Loading...', 'meta'));
+      lines.push(line('Loading...', 'meta'));
       return { lines };
     }
 
@@ -28,7 +28,7 @@ export const sessionDiffsScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> 
         highlightedIndex: nav.highlightedIndex,
         maxVisible: 8,
         formatter: (f) => {
-          return ` ${f.isNew ? `NEW ${SEP} ` : ''}${truncate(f.path, 28)} ${SEP} +${f.added}${f.removed ? ` -${f.removed}` : ''}`;
+          return `${f.isNew ? `NEW ${SEP} ` : ''}${truncate(f.path, 28)} ${SEP} +${f.added}${f.removed ? ` -${f.removed}` : ''}`;
         },
       }),
     );

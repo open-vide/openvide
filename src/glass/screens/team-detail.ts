@@ -65,12 +65,12 @@ export const teamDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
     // === TASKS ===
     if (mode === 'taskScroll') {
       if (tasks.length === 0) {
-        return { lines: [...headerLines, line('  No tasks', 'meta')] };
+        return { lines: [...headerLines, line('No tasks', 'meta')] };
       }
       const taskLines = tasks.map(task => {
         const st = task.status === 'TODO' ? 'TODO' : task.status === 'IN PROGRESS' ? 'PROG' : task.status === 'DONE' ? 'DONE' : task.status.slice(0, 4).toUpperCase();
         const owner = task.owner ? ` @${truncate(task.owner, 8)}` : '';
-        return ` ${st} ${SEP} ${truncate(task.subject, 38 - owner.length)}${owner}`;
+        return `${st} ${SEP} ${truncate(task.subject, 38 - owner.length)}${owner}`;
       });
       const start = Math.max(0, Math.min(offset, taskLines.length - contentSlots));
       const visible = taskLines.slice(start, start + contentSlots);
@@ -86,7 +86,7 @@ export const teamDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
       if (idx === 0) preview = `${tasks.length} tasks`;
       else if (idx === 1) preview = snap.teamPlan ? `${snap.teamPlan.status} · ${snap.teamPlan.iteration}/${snap.teamPlan.maxIterations}` : 'No plans';
       else preview = `${msgs.length} messages`;
-      return { lines: [...headerLines, line(`  ${preview}`, 'meta')] };
+      return { lines: [...headerLines, line(preview, 'meta')] };
     }
 
     // === CHAT BUTTONS (action bar navigation) ===
@@ -100,8 +100,8 @@ export const teamDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
       return {
         lines: [
           ...headerLines,
-          line(`  ${msgs.length} message${msgs.length !== 1 ? 's' : ''}`, 'meta'),
-          line(`  ${lastMsg}`, 'meta'),
+          line(`${msgs.length} message${msgs.length !== 1 ? 's' : ''}`, 'meta'),
+          line(lastMsg, 'meta'),
         ],
       };
     }
@@ -109,7 +109,7 @@ export const teamDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
     // === CHAT READ ===
     if (mode === 'chatRead') {
       if (msgs.length === 0) {
-        return { lines: [...headerLines, line('  No messages', 'meta')] };
+        return { lines: [...headerLines, line('No messages', 'meta')] };
       }
       const msgLines = msgs.map(msg => `${truncate(msg.from, 10)} ${SEP} ${truncate(msg.text, 44)}`);
       const maxBot = Math.max(0, msgLines.length - contentSlots);
@@ -125,15 +125,15 @@ export const teamDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
     if (mode === 'planView') {
       const plan = snap.teamPlan;
       if (!plan) {
-        return { lines: [...headerLines, line('  No plans', 'meta')] };
+        return { lines: [...headerLines, line('No plans', 'meta')] };
       }
 
       const latestRevision = plan.revisions[plan.revisions.length - 1];
       const planLines = [
-        ` ${fieldJoin(plan.status.toUpperCase(), `${plan.iteration}/${plan.maxIterations}`)}`,
-        ` ${fieldJoin(plan.mode.toUpperCase(), `${latestRevision?.tasks.length ?? 0} TASKS`)}`,
+        fieldJoin(plan.status.toUpperCase(), `${plan.iteration}/${plan.maxIterations}`),
+        fieldJoin(plan.mode.toUpperCase(), `${latestRevision?.tasks.length ?? 0} TASKS`),
         ...(latestRevision?.tasks.slice(0, 5).map((task, index) =>
-          ` ${index + 1}. ${truncate(task.subject, 28)} ${SEP} @${truncate(task.owner, 8)}`) ?? []),
+          `${index + 1}. ${truncate(task.subject, 28)} ${SEP} @${truncate(task.owner, 8)}`) ?? []),
       ];
       return { lines: [...headerLines, ...planLines.map((text) => line(text, 'normal'))] };
     }
