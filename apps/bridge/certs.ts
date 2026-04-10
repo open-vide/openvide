@@ -2,6 +2,8 @@
  * TLS certificate and auth token generation for the bridge.
  * Self-signed ECDSA cert + 32-byte random token.
  * Stored at ~/.openvide-daemon/bridge/
+ *
+ * Auto-detects Tailscale IPs and includes them in certificate SANs.
  */
 
 import * as crypto from 'node:crypto';
@@ -26,38 +28,83 @@ function generateToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+/** Detect Tailscale IP from network interfaces (100.64.0.0/10 CGNAT range). */
+export function detectTailscaleIp(): string | null {
+  const interfaces = os.networkInterfaces();
+  for (const addrs of Object.values(interfaces)) {
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      if (addr.family !== 'IPv4' || addr.internal) continue;
+      const parts = addr.address.split('.').map(Number);
+      if (parts[0] === 100 && parts[1]! >= 64 && parts[1]! <= 127) {
+        return addr.address;
+      }
+    }
+  }
+  return null;
+}
+
+/** Build SAN string with all local IPs, hostname, and Tailscale IP. */
+function buildSubjectAltName(): string {
+  const entries = new Set<string>(['DNS:localhost', 'IP:127.0.0.1']);
+  const hostname = os.hostname().trim();
+  if (hostname) {
+    entries.add(`DNS:${hostname}`);
+    const shortHost = hostname.split('.')[0];
+    if (shortHost) entries.add(`DNS:${shortHost}`);
+  }
+
+  const interfaces = os.networkInterfaces();
+  for (const addrs of Object.values(interfaces)) {
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      if (addr.internal || addr.family !== 'IPv4') continue;
+      entries.add(`IP:${addr.address}`);
+    }
+  }
+
+  return Array.from(entries).join(',');
+}
+
+/** Check if the existing cert includes a specific IP in its SANs. */
+function certIncludesIp(certPem: string, ip: string): boolean {
+  try {
+    const result = execSync(`echo "${certPem}" | openssl x509 -noout -text 2>/dev/null`, { encoding: 'utf-8' });
+    return result.includes(`IP Address:${ip}`);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Generate self-signed TLS cert + key using openssl CLI.
- * Node's crypto module doesn't have a high-level X.509 cert builder,
- * so we shell out to openssl which is available on macOS/Linux.
+ * Includes all local IPs + Tailscale IP in SANs.
  */
 function generateCert(): { cert: string; key: string } {
   const tmpKey = path.join(BRIDGE_DIR, 'key.tmp.pem');
   const tmpCert = path.join(BRIDGE_DIR, 'cert.tmp.pem');
 
   try {
-    // Generate ECDSA key
     execSync(
       `openssl ecparam -name prime256v1 -genkey -noout -out "${tmpKey}"`,
       { stdio: 'pipe' },
     );
 
-    // Generate self-signed cert (valid 10 years)
     execSync(
-      `openssl req -new -x509 -key "${tmpKey}" -out "${tmpCert}" -days 3650 -subj "/CN=openvide-bridge" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`,
+      `openssl req -new -x509 -key "${tmpKey}" -out "${tmpCert}" -days 3650 -subj "/CN=openvide-bridge" -addext "subjectAltName=${buildSubjectAltName()}"`,
       { stdio: 'pipe' },
     );
 
     const cert = fs.readFileSync(tmpCert, 'utf-8');
     const key = fs.readFileSync(tmpKey, 'utf-8');
 
-    // Move to final location
     fs.renameSync(tmpKey, KEY_PATH);
     fs.renameSync(tmpCert, CERT_PATH);
+    fs.chmodSync(KEY_PATH, 0o600);
+    fs.chmodSync(CERT_PATH, 0o644);
 
     return { cert, key };
   } catch (err) {
-    // Clean up temp files on error
     try { fs.unlinkSync(tmpKey); } catch { /* ignore */ }
     try { fs.unlinkSync(tmpCert); } catch { /* ignore */ }
     throw err;
@@ -66,12 +113,11 @@ function generateCert(): { cert: string; key: string } {
 
 /**
  * Ensure TLS certs and auth token exist. Generate on first run.
- * Returns the cert, key, and token.
+ * Regenerates cert if Tailscale IP detected but not in existing SANs.
  */
 export function ensureCerts(): BridgeCerts {
   fs.mkdirSync(BRIDGE_DIR, { recursive: true });
 
-  // Generate token if missing
   let token: string;
   if (fs.existsSync(TOKEN_PATH)) {
     token = fs.readFileSync(TOKEN_PATH, 'utf-8').trim();
@@ -81,12 +127,22 @@ export function ensureCerts(): BridgeCerts {
     console.log('[certs] Generated new auth token');
   }
 
-  // Generate cert if missing
   let cert: string;
   let key: string;
-  if (fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH)) {
+  const hasCert = fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH);
+
+  if (hasCert) {
     cert = fs.readFileSync(CERT_PATH, 'utf-8');
     key = fs.readFileSync(KEY_PATH, 'utf-8');
+
+    const tsIp = detectTailscaleIp();
+    if (tsIp && !certIncludesIp(cert, tsIp)) {
+      console.log(`[certs] Tailscale IP ${tsIp} not in certificate — regenerating...`);
+      const generated = generateCert();
+      cert = generated.cert;
+      key = generated.key;
+      console.log('[certs] TLS certificate regenerated with Tailscale IP');
+    }
   } else {
     console.log('[certs] Generating self-signed TLS certificate...');
     const generated = generateCert();
@@ -106,19 +162,22 @@ export function getConnectionUrl(host: string, port: number, token: string): str
 }
 
 /**
- * Print ASCII QR-style connection info to terminal.
+ * Print connection info to terminal.
  */
 export function printConnectionInfo(host: string, port: number, token: string): void {
-  const wsUrl = `wss://${host}:${port}/ws?token=${token}`;
-  const connectUrl = getConnectionUrl(host, port, token);
+  const tsIp = detectTailscaleIp();
 
   console.log('');
   console.log('╔══════════════════════════════════════════╗');
   console.log('║       OpenVide Bridge Connection         ║');
   console.log('╠══════════════════════════════════════════╣');
-  console.log(`║ WSS: ${wsUrl}`);
-  console.log(`║ URL: ${connectUrl}`);
-  console.log(`║ Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
+  console.log(`║ Local:     https://${host}:${port}`);
+  if (tsIp) {
+    console.log(`║ Tailscale: https://${tsIp}:${port}`);
+  } else {
+    console.log('║ Tailscale: not detected');
+  }
+  console.log(`║ Token:     ${token.slice(0, 8)}...${token.slice(-8)}`);
   console.log('╚══════════════════════════════════════════╝');
   console.log('');
 }

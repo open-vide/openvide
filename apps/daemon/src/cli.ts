@@ -10,7 +10,22 @@ import { generateDeployScaffold, type DeployProxy } from "./deployScaffold.js";
 import { runDeployDoctor, runDeploySetup } from "./deployManager.js";
 import type { IpcRequest, IpcResponse, Tool } from "./types.js";
 
-const DAEMON_VERSION = "0.2.0";
+const DAEMON_VERSION = "0.2.1";
+
+function detectTailscaleIp(): string | null {
+  const interfaces = os.networkInterfaces();
+  for (const addrs of Object.values(interfaces)) {
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      if (addr.family !== "IPv4" || addr.internal) continue;
+      const parts = addr.address.split(".").map(Number);
+      if (parts[0] === 100 && parts[1]! >= 64 && parts[1]! <= 127) {
+        return addr.address;
+      }
+    }
+  }
+  return null;
+}
 const LONG_IPC_TIMEOUT_MS = 60000;
 
 function usage(): never {
@@ -186,7 +201,9 @@ async function main(): Promise<void> {
   if (command === "keygen") {
     const flags = parseArgs(args.slice(1));
     const comment = flags.get("comment") ?? "openvide-daemon-keygen";
-    const host = flags.get("host");
+    const explicitHost = flags.get("host");
+    const tsIp = detectTailscaleIp();
+    const host = explicitHost ?? tsIp ?? undefined;
     const portStr = flags.get("port");
     const port = portStr ? parseInt(portStr, 10) : undefined;
     const username = flags.get("username");
@@ -206,6 +223,9 @@ async function main(): Promise<void> {
     }
     process.stderr.write(`\nFingerprint: ${result.fingerprint}\n`);
     process.stderr.write(`Public key added to ~/.ssh/authorized_keys\n`);
+    if (tsIp && !explicitHost) {
+      process.stderr.write(`Tailscale detected: QR uses ${tsIp}\n`);
+    }
     process.stderr.write(`Scan the QR code above with the OpenVide app to connect.\n\n`);
 
     // Print JSON to stdout (machine consumption)
@@ -257,12 +277,12 @@ async function main(): Promise<void> {
         ensureDaemon();
         const portStr = flags.get("port");
         const port = portStr ? parseInt(portStr, 10) : 7842;
-        const tls = !flags.has("no-tls");
+        const tls = !flags.has("no-tls"); // default: TLS on (auto-uses Tailscale cert if available)
         const res = await sendCommand({ cmd: "bridge.enable", port, tls });
         printJson(res);
 
         if (res.ok) {
-          process.stderr.write(`Bridge started on port ${port}${tls ? " (TLS)" : " (plain HTTP)"}\n`);
+          process.stderr.write(`Bridge started on port ${port}${tls ? "" : " (no TLS)"}\n`);
         }
         return;
       }
@@ -287,13 +307,17 @@ async function main(): Promise<void> {
       case "token": {
         ensureDaemon();
         const expire = flags.get("expire") ?? "24h";
-        const res = await sendCommand({ cmd: "bridge.token.create", expire });
+        const res = await sendCommand({ cmd: "bridge.token.create", expire }) as IpcResponse & Record<string, unknown>;
         printJson(res);
         if (res.ok && res.bridgeToken) {
-          process.stderr.write(`Token: ${res.bridgeToken}\n`);
+          process.stderr.write(`\nToken: ${res.bridgeToken as string}\n`);
           if (res.bridgeUrl) {
-            process.stderr.write(`URL: ${res.bridgeUrl}\n`);
+            process.stderr.write(`Local:     ${res.bridgeUrl as string}\n`);
           }
+          if (res.tailscaleUrl) {
+            process.stderr.write(`Tailscale: ${res.tailscaleUrl as string}\n`);
+          }
+          process.stderr.write(`\n`);
         }
         return;
       }

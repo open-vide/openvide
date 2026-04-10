@@ -1,6 +1,6 @@
 {
   "name": "@openvide/daemon",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Persistent session manager for AI CLI tools (Claude Code, Codex, Gemini)",
   "type": "module",
   "bin": {

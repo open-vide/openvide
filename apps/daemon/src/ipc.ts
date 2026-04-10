@@ -11,6 +11,7 @@ import { readHistoryForDaemonSession, readHistoryForNativeSession } from "./hist
 import { listCodexModels } from "./codexModels.js";
 import { generateSecret, createJwt, parseDuration } from "./jwt.js";
 import { startBridge, stopBridge, isBridgeRunning, getBridgeInfo, updateBridgeConfig, getLocalIp } from "./bridgeServer.js";
+import { detectTailscaleIp, detectTailscaleHostname, getTailscaleTls } from "./certs.js";
 import { encodeQR } from "./qrText.js";
 import * as tm from "./teamManager.js";
 import * as sched from "./scheduleManager.js";
@@ -296,7 +297,7 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
     case "bridge.enable": {
       const state = sm.getState();
       const port = typeof req.port === "number" ? req.port : 7842;
-      const tls = req.tls !== false; // default true
+      const tls = req.tls !== false; // default true — auto-uses Tailscale cert if available
       const bindHost = typeof req.bindHost === "string" && req.bindHost.trim()
         ? req.bindHost.trim()
         : undefined;
@@ -358,11 +359,21 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
         expireSeconds,
         extraClaims: { kind: "bootstrap" },
       });
-      return {
+      const localIp = getLocalIp();
+      const port = state.bridge.port;
+      const tsIp = detectTailscaleIp();
+      const tsTls = getTailscaleTls();
+      const result: IpcResponse & Record<string, unknown> = {
         ok: true,
         bridgeToken: token,
-        bridgeUrl: `openvide://${getLocalIp()}:${state.bridge.port}?token=${token}`,
-      } as IpcResponse & { bridgeToken: string; bridgeUrl: string };
+        bridgeUrl: `http://${localIp}:${port}`,
+      };
+      if (tsTls) {
+        result.tailscaleUrl = `https://${tsTls.hostname}:${port}`;
+      } else if (tsIp) {
+        result.tailscaleUrl = `http://${tsIp}:${port}`;
+      }
+      return result;
     }
 
     case "bridge.token.revoke": {

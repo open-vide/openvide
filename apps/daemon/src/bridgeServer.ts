@@ -16,7 +16,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { verifyJwt } from "./jwt.js";
-import { ensureBridgeTls } from "./certs.js";
+import { detectTailscaleIp, detectTailscaleHostname, getTailscaleTls } from "./certs.js";
 import { routeCommand } from "./ipc.js";
 import { handleCompletions, handleCompletionsStreaming } from "./completions.js";
 import { daemonDir, log, logError } from "./utils.js";
@@ -717,24 +717,32 @@ export function startBridge(config: BridgeConfig): void {
 
   registerTeamBroadcast(broadcastToClients);
 
-  if (config.tls) {
-    const tls = ensureBridgeTls();
-    server = https.createServer({ cert: tls.cert, key: tls.key }, requestHandler);
+  // Try Tailscale HTTPS cert (trusted Let's Encrypt), fall back to HTTP
+  const tsTls = getTailscaleTls();
+  if (tsTls) {
+    server = https.createServer({ cert: tsTls.cert, key: tsTls.key }, requestHandler);
   } else {
     server = http.createServer(requestHandler);
   }
 
   server.on("upgrade", handleUpgrade);
 
-  server.on("error", (err) => {
+  server.on("error", (err: Error) => {
     logError("[bridge] Server error:", err.message);
   });
 
   const bindHost = config.bindHost?.trim() || "::";
+  const tsIp = detectTailscaleIp();
+  const tsHostname = tsTls?.hostname;
 
   server.listen(config.port, bindHost, () => {
-    const proto = config.tls ? "HTTPS" : "HTTP";
+    const proto = tsTls ? "HTTPS" : "HTTP";
     log(`[bridge] ${proto}+WebSocket bridge listening on ${bindHost}:${config.port}`);
+    if (tsHostname) {
+      log(`[bridge] Tailscale HTTPS: https://${tsHostname}:${config.port}`);
+    } else if (tsIp) {
+      log(`[bridge] Tailscale: http://${tsIp}:${config.port}`);
+    }
   });
 
   // Keepalive ping every 30s

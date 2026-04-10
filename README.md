@@ -5,6 +5,10 @@
 <h1 align="center">OpenVide</h1>
 
 <p align="center">
+  <a href="https://buymeacoffee.com/f3tch"><img src="https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?style=flat&logo=buy-me-a-coffee" alt="Buy Me A Coffee"></a>
+</p>
+
+<p align="center">
   Open source remote control for Claude Code, Codex, and team automation over SSH and an optional HTTPS bridge.
 </p>
 
