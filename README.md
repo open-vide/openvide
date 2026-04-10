@@ -229,6 +229,39 @@ which openvide-daemon
 # should resolve to the daemon from ../tools/openvide/apps/daemon
 ```
 
+## Connecting to the Daemon
+
+### Local Network (same WiFi)
+
+```bash
+npm install -g @openvide/daemon
+openvide-daemon bridge enable --no-tls
+openvide-daemon bridge token
+```
+
+Paste the Local URL + token into the app.
+
+### Remote via Tailscale (Recommended)
+
+1. Install Tailscale on your machine and phone
+2. Login to the same account, enable HTTPS in tailnet admin
+3. Start the daemon:
+
+```bash
+openvide-daemon bridge enable
+openvide-daemon bridge token
+```
+
+Paste the Tailscale URL (`https://your-machine.tailXXXXX.ts.net:7842`) + token into the app. Works from anywhere with trusted HTTPS.
+
+### Remote via Caddy + Domain
+
+```bash
+openvide-daemon bridge enable --no-tls
+```
+
+Then set up Caddy as reverse proxy with your domain. See the full guide in the [@openvide/daemon README](https://www.npmjs.com/package/@openvide/daemon).
+
 ## Build
 
 ```bash
