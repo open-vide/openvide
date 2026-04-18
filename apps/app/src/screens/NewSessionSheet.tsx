@@ -14,7 +14,7 @@ import { evaluateDaemonCompatibility } from "../core/daemonVersion";
 
 type Props = NativeStackScreenProps<RootStackParamList, "NewSessionSheet">;
 
-const ALL_TOOLS: ToolName[] = ["claude", "codex"];
+const ALL_TOOLS: ToolName[] = ["claude", "codex", "gemini"];
 
 const TOOL_LABELS: Record<ToolName, string> = {
   claude: "Claude Code",
@@ -184,7 +184,7 @@ export function NewSessionSheet({ route, navigation }: Props): JSX.Element {
               )}
               onPress={() => handleToolSelect(tool)}
             >
-              <ProviderIcon tool={tool as "claude" | "codex"} size={24} />
+              <ProviderIcon tool={tool} size={24} />
               <Text className={cn(
                 "text-[15px] font-semibold",
                 selectedTool === tool ? "text-accent" : "text-foreground",

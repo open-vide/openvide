@@ -1,0 +1,29 @@
+{
+  "package_id": "com.openvide.g2",
+  "edition": "202601",
+  "name": "open-vide",
+  "version": "0.2.2",
+  "min_sdk_version": "0.0.10",
+  "min_app_version": "0.1.2",
+  "tagline": "Glanceable HUD for dev workflows",
+  "description": "A thin, glanceable HUD and control layer for developer/agent workflows on Even Realities G2",
+  "author": "Open Vide",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "Connects to your self-hosted OpenVide daemon bridge, AI backends, and speech-to-text providers."
+    },
+    {
+      "name": "phone-microphone",
+      "desc": "Captures voice input from the phone for chat prompts and speech-to-text."
+    },
+    {
+      "name": "g2-microphone",
+      "desc": "Captures voice input from the glasses flow when supported by the device runtime."
+    }
+  ],
+  "supported_languages": [
+    "en"
+  ]
+}

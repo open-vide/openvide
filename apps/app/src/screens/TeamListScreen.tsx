@@ -14,7 +14,7 @@ import type { MainStackParamList } from "../navigation/types";
 
 type Props = NativeStackScreenProps<MainStackParamList, "TeamList">;
 
-const TOOLS: Array<TeamMemberInput["tool"]> = ["claude", "codex"];
+const TOOLS: Array<TeamMemberInput["tool"]> = ["claude", "codex", "gemini"];
 const ROLES: Array<TeamMemberInput["role"]> = ["lead", "planner", "coder", "reviewer"];
 
 export function TeamListScreen({ navigation }: Props): JSX.Element {
@@ -169,7 +169,7 @@ export function TeamListScreen({ navigation }: Props): JSX.Element {
                 <View className="flex-row flex-wrap items-center gap-2 mt-1">
                   {item.members.map((member, idx) => (
                     <View key={idx} className="flex-row items-center gap-1.5 bg-muted rounded-full px-2 py-1">
-                      {(member.tool === "claude" || member.tool === "codex") ? (
+                      {(member.tool === "claude" || member.tool === "codex" || member.tool === "gemini") ? (
                         <ProviderIcon tool={member.tool} size={12} />
                       ) : null}
                       <Text className="text-dimmed text-[11px]">{member.name}</Text>
@@ -277,7 +277,7 @@ export function TeamListScreen({ navigation }: Props): JSX.Element {
                           className="px-3 py-2 rounded-full active:opacity-80 flex-row items-center gap-2"
                           style={{ backgroundColor: selected ? accent : "rgba(255,255,255,0.06)" }}
                         >
-                          {(tool === "claude" || tool === "codex") ? <ProviderIcon tool={tool as "claude" | "codex"} size={14} /> : null}
+                          <ProviderIcon tool={tool} size={14} />
                           <Text style={{ color: selected ? primaryForeground : foreground }}>{tool}</Text>
                         </Pressable>
                       );

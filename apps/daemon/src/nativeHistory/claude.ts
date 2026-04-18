@@ -38,7 +38,16 @@ function cleanLabel(value: unknown): string | undefined {
   if (!trimmed || trimmed.toLowerCase() === "no prompt") return undefined;
   // Skip system-generated messages that aren't real user prompts
   if (/^\[.*\]$/.test(trimmed)) return undefined;
+  if (isOpenVideInternalPrompt(trimmed)) return undefined;
   return trimmed;
+}
+
+function isOpenVideInternalPrompt(value: string): boolean {
+  const lower = value.toLowerCase();
+  return (
+    lower.includes("you generate short follow-up prompts for an existing ai coding chat")
+    || lower.includes('return strict json only in this exact shape: {"suggestions"')
+  );
 }
 
 async function readPrefix(filePath: string, maxBytes = MAX_PREFIX_BYTES): Promise<string> {
@@ -64,11 +73,13 @@ function parseClaudeJsonlMeta(raw: string, lines: string[]): {
   cwd?: string;
   createdAt?: string;
   title?: string;
+  internalPrompt?: boolean;
 } {
   let sessionId: string | undefined = extractJsonString(raw, "sessionId");
   let cwd: string | undefined = extractJsonString(raw, "cwd");
   let createdAt: string | undefined = parseIsoOrUndefined(extractJsonString(raw, "timestamp"));
   let title: string | undefined;
+  let internalPrompt = false;
 
   for (const line of lines) {
     let obj: JsonValue;
@@ -94,6 +105,9 @@ function parseClaudeJsonlMeta(raw: string, lines: string[]): {
       if (message && typeof message === "object" && !Array.isArray(message)) {
         const messageContent = message["content"];
         if (typeof messageContent === "string") {
+          if (isOpenVideInternalPrompt(messageContent)) {
+            internalPrompt = true;
+          }
           title = cleanLabel(messageContent);
         } else if (Array.isArray(messageContent)) {
           // Skip user messages that contain tool_result blocks — these are
@@ -106,6 +120,9 @@ function parseClaudeJsonlMeta(raw: string, lines: string[]): {
               if (!block || typeof block !== "object" || Array.isArray(block)) continue;
               const text = block["text"];
               if (typeof text === "string") {
+                if (isOpenVideInternalPrompt(text)) {
+                  internalPrompt = true;
+                }
                 const cleaned = cleanLabel(text);
                 if (cleaned) {
                   title = cleaned;
@@ -119,11 +136,11 @@ function parseClaudeJsonlMeta(raw: string, lines: string[]): {
     }
   }
 
-  return { sessionId, cwd, createdAt, title };
+  return { sessionId, cwd, createdAt, title, internalPrompt };
 }
 
-export async function listClaudeNativeSessions(cwd: string): Promise<NativeSessionRecord[]> {
-  const targetCwd = normalizeWorkspacePath(cwd);
+export async function listClaudeNativeSessions(cwd?: string): Promise<NativeSessionRecord[]> {
+  const targetCwd = cwd ? normalizeWorkspacePath(cwd) : undefined;
   const projectsRoot = path.join(os.homedir(), ".claude", "projects");
   const dedup = new Map<string, NativeSessionRecord>();
 
@@ -160,7 +177,8 @@ export async function listClaudeNativeSessions(cwd: string): Promise<NativeSessi
         const sessionId = typeof entry.sessionId === "string" ? entry.sessionId : undefined;
         const projectPath = typeof entry.projectPath === "string" ? entry.projectPath : undefined;
         if (!sessionId || !projectPath) continue;
-        if (normalizeWorkspacePath(projectPath) !== targetCwd) continue;
+        if (typeof entry.firstPrompt === "string" && isOpenVideInternalPrompt(entry.firstPrompt)) continue;
+        if (targetCwd && normalizeWorkspacePath(projectPath) !== targetCwd) continue;
 
         const createdAt =
           parseIsoOrUndefined(entry.created) ??
@@ -207,7 +225,8 @@ export async function listClaudeNativeSessions(cwd: string): Promise<NativeSessi
 
       const meta = parseClaudeJsonlMeta(prefix, lines);
       if (!meta.sessionId || !meta.cwd) continue;
-      if (normalizeWorkspacePath(meta.cwd) !== targetCwd) continue;
+      if (meta.internalPrompt) continue;
+      if (targetCwd && normalizeWorkspacePath(meta.cwd) !== targetCwd) continue;
 
       let updatedAt: string | undefined;
       try {

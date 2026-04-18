@@ -10,7 +10,22 @@ import { generateDeployScaffold, type DeployProxy } from "./deployScaffold.js";
 import { runDeployDoctor, runDeploySetup } from "./deployManager.js";
 import type { IpcRequest, IpcResponse, Tool } from "./types.js";
 
-const DAEMON_VERSION = "0.2.0";
+const DAEMON_VERSION = "0.2.3";
+
+function detectTailscaleIp(): string | null {
+  const interfaces = os.networkInterfaces();
+  for (const addrs of Object.values(interfaces)) {
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      if (addr.family !== "IPv4" || addr.internal) continue;
+      const parts = addr.address.split(".").map(Number);
+      if (parts[0] === 100 && parts[1]! >= 64 && parts[1]! <= 127) {
+        return addr.address;
+      }
+    }
+  }
+  return null;
+}
 const LONG_IPC_TIMEOUT_MS = 60000;
 
 function usage(): never {
@@ -25,25 +40,30 @@ Usage:
   openvide-daemon session stream --id <id> [--offset <n>] [--follow]
   openvide-daemon session cancel --id <id>
   openvide-daemon session list
+  openvide-daemon session catalog
   openvide-daemon session list-native --cwd <path> [--tool <claude|codex|all>]
   openvide-daemon session list-workspace --cwd <path>
   openvide-daemon session get --id <id>
+  openvide-daemon session suggest --id <id> [--limit <n>]
   openvide-daemon session history --id <id> [--limit-lines <n>]
   openvide-daemon session history --tool <claude|codex> --resume-id <id> [--cwd <path>] [--limit-lines <n>]
   openvide-daemon session wait-idle --id <id> [--timeout-ms <n>]
   openvide-daemon session remove --id <id>
   openvide-daemon model list --tool <codex>
   openvide-daemon config set-push-token --token <token>
+  openvide-daemon prompt list
+  openvide-daemon prompt add --label <label> --prompt <text>
+  openvide-daemon prompt remove --id <id>
   openvide-daemon bridge enable [--port 7842] [--no-tls]
   openvide-daemon bridge disable
   openvide-daemon bridge status
   openvide-daemon bridge token [--expire 24h]
   openvide-daemon bridge revoke --jti <jti>
   openvide-daemon bridge qr [--expire 24h] [--host <host>]
-  openvide-daemon bridge config [--bind-host <host>] [--default-cwd <path>] [--even-ai-tool claude|codex] [--even-ai-mode new|last|pinned] [--even-ai-pin-session <id>]
-  openvide-daemon deploy scaffold [--proxy caddy|nginx|none] [--domain <domain>] [--public-origin <origin>] [--email <email>] [--output <dir>] [--service-name <name>] [--daemon-user <user>] [--bridge-port <n>] [--bind-host <host>] [--default-cwd <path>] [--even-ai-tool claude|codex] [--even-ai-mode new|last|pinned]
-  openvide-daemon deploy doctor [--proxy caddy|nginx|none] [--domain <domain>] [--public-origin <origin>] [--output <dir>] [--service-name <name>] [--daemon-user <user>] [--bridge-port <n>] [--bind-host <host>] [--default-cwd <path>] [--even-ai-tool claude|codex] [--even-ai-mode new|last|pinned]
-  openvide-daemon deploy setup [--proxy caddy|nginx|none] [--domain <domain>] [--public-origin <origin>] [--email <email>] [--output <dir>] [--service-name <name>] [--daemon-user <user>] [--bridge-port <n>] [--bind-host <host>] [--default-cwd <path>] [--even-ai-tool claude|codex] [--even-ai-mode new|last|pinned] [--issue-token] [--token-expire 24h] [--dry-run]
+  openvide-daemon bridge config [--bind-host <host>] [--default-cwd <path>] [--even-ai-tool claude|codex|gemini] [--even-ai-mode new|last|pinned] [--even-ai-pin-session <id>]
+  openvide-daemon deploy scaffold [--proxy caddy|nginx|none] [--domain <domain>] [--public-origin <origin>] [--email <email>] [--output <dir>] [--service-name <name>] [--daemon-user <user>] [--bridge-port <n>] [--bind-host <host>] [--default-cwd <path>] [--even-ai-tool claude|codex|gemini] [--even-ai-mode new|last|pinned]
+  openvide-daemon deploy doctor [--proxy caddy|nginx|none] [--domain <domain>] [--public-origin <origin>] [--output <dir>] [--service-name <name>] [--daemon-user <user>] [--bridge-port <n>] [--bind-host <host>] [--default-cwd <path>] [--even-ai-tool claude|codex|gemini] [--even-ai-mode new|last|pinned]
+  openvide-daemon deploy setup [--proxy caddy|nginx|none] [--domain <domain>] [--public-origin <origin>] [--email <email>] [--output <dir>] [--service-name <name>] [--daemon-user <user>] [--bridge-port <n>] [--bind-host <host>] [--default-cwd <path>] [--even-ai-tool claude|codex|gemini] [--even-ai-mode new|last|pinned] [--issue-token] [--token-expire 24h] [--dry-run]
   openvide-daemon schedule list
   openvide-daemon schedule get --id <id>
   openvide-daemon schedule create --name <name> --schedule <cron> [--project <name>] [--enabled true|false] (--target-json <json> | (--target-kind prompt --tool <claude|codex|gemini> --cwd <path> --prompt <text> [--model <model>] [--mode <mode>]) | (--target-kind team --team-id <id> --prompt <text> [--to <member|*>]))
@@ -186,7 +206,9 @@ async function main(): Promise<void> {
   if (command === "keygen") {
     const flags = parseArgs(args.slice(1));
     const comment = flags.get("comment") ?? "openvide-daemon-keygen";
-    const host = flags.get("host");
+    const explicitHost = flags.get("host");
+    const tsIp = detectTailscaleIp();
+    const host = explicitHost ?? tsIp ?? undefined;
     const portStr = flags.get("port");
     const port = portStr ? parseInt(portStr, 10) : undefined;
     const username = flags.get("username");
@@ -206,6 +228,9 @@ async function main(): Promise<void> {
     }
     process.stderr.write(`\nFingerprint: ${result.fingerprint}\n`);
     process.stderr.write(`Public key added to ~/.ssh/authorized_keys\n`);
+    if (tsIp && !explicitHost) {
+      process.stderr.write(`Tailscale detected: QR uses ${tsIp}\n`);
+    }
     process.stderr.write(`Scan the QR code above with the OpenVide app to connect.\n\n`);
 
     // Print JSON to stdout (machine consumption)
@@ -257,12 +282,12 @@ async function main(): Promise<void> {
         ensureDaemon();
         const portStr = flags.get("port");
         const port = portStr ? parseInt(portStr, 10) : 7842;
-        const tls = !flags.has("no-tls");
+        const tls = !flags.has("no-tls"); // default: TLS on (auto-uses Tailscale cert if available)
         const res = await sendCommand({ cmd: "bridge.enable", port, tls });
         printJson(res);
 
         if (res.ok) {
-          process.stderr.write(`Bridge started on port ${port}${tls ? " (TLS)" : " (plain HTTP)"}\n`);
+          process.stderr.write(`Bridge started on port ${port}${tls ? "" : " (no TLS)"}\n`);
         }
         return;
       }
@@ -287,13 +312,17 @@ async function main(): Promise<void> {
       case "token": {
         ensureDaemon();
         const expire = flags.get("expire") ?? "24h";
-        const res = await sendCommand({ cmd: "bridge.token.create", expire });
+        const res = await sendCommand({ cmd: "bridge.token.create", expire }) as IpcResponse & Record<string, unknown>;
         printJson(res);
         if (res.ok && res.bridgeToken) {
-          process.stderr.write(`Token: ${res.bridgeToken}\n`);
+          process.stderr.write(`\nToken: ${res.bridgeToken as string}\n`);
           if (res.bridgeUrl) {
-            process.stderr.write(`URL: ${res.bridgeUrl}\n`);
+            process.stderr.write(`Local:     ${res.bridgeUrl as string}\n`);
           }
+          if (res.tailscaleUrl) {
+            process.stderr.write(`Tailscale: ${res.tailscaleUrl as string}\n`);
+          }
+          process.stderr.write(`\n`);
         }
         return;
       }
@@ -349,6 +378,49 @@ async function main(): Promise<void> {
     }
   }
 
+  // ── prompt subcommands ──
+  if (command === "prompt") {
+    const sub = args[1];
+    if (!sub) failJson("Missing prompt subcommand");
+
+    const flags = parseArgs(args.slice(2));
+
+    switch (sub) {
+      case "list": {
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "prompt.list" });
+        printJson(res);
+        return;
+      }
+
+      case "add": {
+        const label = flags.get("label");
+        const prompt = flags.get("prompt");
+        if (!label || !prompt) {
+          failJson("--label and --prompt are required");
+        }
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "prompt.add", label, prompt });
+        printJson(res);
+        return;
+      }
+
+      case "remove": {
+        const id = flags.get("id");
+        if (!id) {
+          failJson("--id is required");
+        }
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "prompt.remove", id });
+        printJson(res);
+        return;
+      }
+
+      default:
+        failJson(`Unknown prompt subcommand: ${sub}`);
+    }
+  }
+
   // ── deploy subcommands ──
   if (command === "deploy") {
     const sub = args[1];
@@ -377,8 +449,8 @@ async function main(): Promise<void> {
     const bindHost = flags.get("bind-host")
       ?? (proxy === "none" ? "::" : "127.0.0.1");
     const evenAiTool = flags.get("even-ai-tool");
-    if (evenAiTool && evenAiTool !== "claude" && evenAiTool !== "codex") {
-      failJson("--even-ai-tool must be claude or codex");
+    if (evenAiTool && evenAiTool !== "claude" && evenAiTool !== "codex" && evenAiTool !== "gemini") {
+      failJson("--even-ai-tool must be claude, codex, or gemini");
     }
     const evenAiMode = flags.get("even-ai-mode");
     if (evenAiMode && evenAiMode !== "new" && evenAiMode !== "last" && evenAiMode !== "pinned") {
@@ -396,7 +468,7 @@ async function main(): Promise<void> {
       bridgePort,
       bindHost,
       defaultCwd: flags.get("default-cwd"),
-      evenAiTool: evenAiTool as "claude" | "codex" | undefined,
+      evenAiTool: evenAiTool as "claude" | "codex" | "gemini" | undefined,
       evenAiMode: evenAiMode as "new" | "last" | "pinned" | undefined,
     };
 
@@ -539,6 +611,13 @@ async function main(): Promise<void> {
         return;
       }
 
+      case "catalog": {
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "session.catalog" }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
       case "list-native": {
         const cwd = flags.get("cwd");
         const tool = flags.get("tool");
@@ -579,6 +658,22 @@ async function main(): Promise<void> {
         }
         ensureDaemon();
         const res = await sendCommand({ cmd: "session.get", id });
+        printJson(res);
+        return;
+      }
+
+      case "suggest": {
+        const id = flags.get("id");
+        if (!id) {
+          failJson("--id is required");
+        }
+        const limitRaw = flags.get("limit");
+        const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+        if (limitRaw && (!Number.isFinite(limit) || (limit ?? 0) <= 0)) {
+          failJson("--limit must be a positive integer");
+        }
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "session.suggest", id, limit }, LONG_IPC_TIMEOUT_MS);
         printJson(res);
         return;
       }

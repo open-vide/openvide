@@ -24,7 +24,7 @@ const COLUMN_LABELS: Record<string, string> = {
   review: "Review",
   approved: "Approved",
 };
-const TOOLS: Array<TeamMemberInput["tool"]> = ["claude", "codex"];
+const TOOLS: Array<TeamMemberInput["tool"]> = ["claude", "codex", "gemini"];
 const ROLES: Array<TeamMemberInput["role"]> = ["lead", "planner", "coder", "reviewer"];
 
 export function TeamDetailScreen({ navigation, route }: Props): JSX.Element {
@@ -283,7 +283,7 @@ export function TeamDetailScreen({ navigation, route }: Props): JSX.Element {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {team.members.map((member) => (
               <View key={member.sessionId} className="flex-row items-center gap-1.5 bg-muted rounded-full px-2 py-1">
-                {(member.tool === "claude" || member.tool === "codex") ? <ProviderIcon tool={member.tool} size={12} /> : null}
+                {(member.tool === "claude" || member.tool === "codex" || member.tool === "gemini") ? <ProviderIcon tool={member.tool} size={12} /> : null}
                 <Text className="text-foreground text-[11px]">{member.name}</Text>
                 <Text className="text-dimmed text-[10px]">{member.role}</Text>
               </View>
@@ -439,7 +439,7 @@ export function TeamDetailScreen({ navigation, route }: Props): JSX.Element {
                   className="px-3 py-2 rounded-full active:opacity-80 flex-row items-center gap-2"
                   style={{ backgroundColor: newOwner === member.name ? accent : "rgba(255,255,255,0.06)" }}
                 >
-                  {(member.tool === "claude" || member.tool === "codex") ? <ProviderIcon tool={member.tool} size={14} /> : null}
+                  {(member.tool === "claude" || member.tool === "codex" || member.tool === "gemini") ? <ProviderIcon tool={member.tool} size={14} /> : null}
                   <Text style={{ color: newOwner === member.name ? primaryForeground : foreground }}>{member.name}</Text>
                 </Pressable>
               ))}
@@ -597,7 +597,7 @@ export function TeamDetailScreen({ navigation, route }: Props): JSX.Element {
                           className="px-3 py-2 rounded-full active:opacity-80 flex-row items-center gap-2"
                           style={{ backgroundColor: selected ? accent : "rgba(255,255,255,0.06)" }}
                         >
-                          {(tool === "claude" || tool === "codex") ? <ProviderIcon tool={tool as "claude" | "codex"} size={14} /> : null}
+                          <ProviderIcon tool={tool} size={14} />
                           <Text style={{ color: selected ? primaryForeground : foreground }}>{tool}</Text>
                         </Pressable>
                       );

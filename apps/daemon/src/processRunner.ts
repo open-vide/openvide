@@ -12,10 +12,12 @@ export interface RunResult {
   exitCode: number | null;
   conversationId?: string;
   resumeUnsupported?: boolean;
+  fallbackToCli?: boolean;
 }
 
 export interface RunningProcess {
-  child: child_process.ChildProcess;
+  child?: child_process.ChildProcess;
+  pid?: number;
   kill: (signal?: NodeJS.Signals) => void;
 }
 
@@ -144,6 +146,7 @@ export function spawnTurn(
     }
 
     const stderrLines: string[] = [];
+    const stdoutBuffer: string[] = [];
     let stdoutRl: readline.Interface | undefined;
     let stderrRl: readline.Interface | undefined;
 
@@ -155,6 +158,14 @@ export function spawnTurn(
     if (child.stdout) {
       stdoutRl = readline.createInterface({ input: child.stdout });
       stdoutRl.on("line", (line) => {
+        // For Gemini, the whole CLI output is ONE pretty-printed JSON blob split
+        // across many stdout lines (none individually parseable). We buffer the
+        // lines here and emit a synthesized text event at close time so the
+        // webview parser can render the response normally.
+        if (session.tool === "gemini") {
+          stdoutBuffer.push(line);
+          return;
+        }
         const entry: OutputLine = { t: "o", ts: nowEpoch(), line };
         const delta = appendOutput(session.id, entry);
         onOutputDelta(delta.lines, delta.bytes);
@@ -170,6 +181,10 @@ export function spawnTurn(
       stderrRl = readline.createInterface({ input: child.stderr });
       stderrRl.on("line", (line) => {
         stderrLines.push(line);
+        // Gemini prints noisy startup banners + node deprecation warnings on
+        // stderr that aren't real errors. Keep them for retry detection but
+        // don't persist as chat output.
+        if (session.tool === "gemini") return;
         const entry: OutputLine = { t: "e", ts: nowEpoch(), line };
         const delta = appendOutput(session.id, entry);
         onOutputDelta(delta.lines, delta.bytes);
@@ -208,6 +223,35 @@ export function spawnTurn(
         return;
       }
 
+      // Gemini: emit the parsed response as a synthesized text event + capture
+      // the returned session_id as the conversation id for resume.
+      if (session.tool === "gemini" && stdoutBuffer.length > 0) {
+        const raw = stdoutBuffer.join("\n").trim();
+        try {
+          const parsed = JSON.parse(raw);
+          if (typeof parsed?.session_id === "string" && parsed.session_id) {
+            conversationId = parsed.session_id;
+          }
+          const text = typeof parsed?.response === "string" && parsed.response.length > 0
+            ? parsed.response
+            : typeof parsed?.text === "string" ? parsed.text : "";
+          if (text) {
+            const synth: OutputLine = {
+              t: "o",
+              ts: nowEpoch(),
+              line: JSON.stringify({ type: "text", text }),
+            };
+            const sDelta = appendOutput(session.id, synth);
+            onOutputDelta(sDelta.lines, sDelta.bytes);
+          }
+        } catch {
+          // Fall back: emit raw buffer as-is so it's at least visible
+          const fallback: OutputLine = { t: "o", ts: nowEpoch(), line: raw };
+          const fDelta = appendOutput(session.id, fallback);
+          onOutputDelta(fDelta.lines, fDelta.bytes);
+        }
+      }
+
       const endEntry: OutputLine = {
         t: "m",
         ts: nowEpoch(),
@@ -227,6 +271,9 @@ export function spawnTurn(
   return {
     get child() {
       return child as child_process.ChildProcess;
+    },
+    get pid() {
+      return child?.pid;
     },
     kill: (signal: NodeJS.Signals = "SIGINT") => {
       shouldKill = true;

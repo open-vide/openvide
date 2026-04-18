@@ -6,7 +6,7 @@ import type {
   DaemonOutputLine,
   CodexModelInfo,
 } from "./DaemonTransport";
-import type { Transport, ScheduledTask, ScheduleDraft, TeamInfo, TeamTaskInfo, TeamMessageInfo, TeamPlanInfo, TeamMemberInput, TeamPlanInput, TeamPlanSubmitOpts, BridgeRuntimeConfig } from "./Transport";
+import type { Transport, ScheduledTask, ScheduleDraft, TeamInfo, TeamTaskInfo, TeamMessageInfo, TeamPlanInfo, TeamMemberInput, TeamPlanInput, TeamPlanSubmitOpts, BridgeRuntimeConfig, FollowUpSuggestion } from "./Transport";
 
 export class BridgeTransport implements Transport {
   private readonly activeControllers = new Set<AbortController>();
@@ -261,6 +261,18 @@ export class BridgeTransport implements Transport {
     return Array.isArray(sessions) ? (sessions as unknown as DaemonSessionInfo[]) : [];
   }
 
+  async listSessionCatalog(
+    target: TargetProfile,
+    credentials: SshCredentials,
+  ): Promise<WorkspaceChatInfo[]> {
+    const resp = await this.rpc(target, credentials, "session.catalog");
+    if (!resp.ok) {
+      throw new Error((resp.error as string) ?? "Bridge session catalog failed");
+    }
+    const sessions = resp.sessions;
+    return Array.isArray(sessions) ? (sessions as unknown as WorkspaceChatInfo[]) : [];
+  }
+
   async listWorkspaceSessions(
     target: TargetProfile,
     credentials: SshCredentials,
@@ -345,6 +357,22 @@ export class BridgeTransport implements Transport {
       hidden: m.hidden === true,
       isDefault: m.isDefault === true,
     })).filter((m) => m.id.length > 0);
+  }
+
+  async sessionSuggest(
+    target: TargetProfile,
+    credentials: SshCredentials,
+    daemonSessionId: string,
+    limit = 4,
+  ): Promise<FollowUpSuggestion[]> {
+    const resp = await this.rpc(target, credentials, "session.suggest", {
+      id: daemonSessionId,
+      limit,
+    });
+    if (!resp.ok) {
+      throw new Error((resp.error as string) ?? "Bridge suggest failed");
+    }
+    return Array.isArray(resp.suggestions) ? (resp.suggestions as FollowUpSuggestion[]) : [];
   }
 
   async registerPushToken(

@@ -12,7 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { newId } from "../core/id";
 import { DaemonTransport, type SessionHistoryPayload, type WorkspaceChatInfo } from "../core/ai/DaemonTransport";
 import { BridgeTransport } from "../core/ai/BridgeTransport";
-import type { Transport } from "../core/ai/Transport";
+import type { FollowUpSuggestion, Transport } from "../core/ai/Transport";
 import { parseSessionHistory } from "../core/ai/historyParser";
 import { deriveHydratedSessionStatus } from "../core/ai/planMode";
 import { SessionEngine } from "../core/ai/SessionEngine";
@@ -110,6 +110,10 @@ function getHydratedContext(
     contextSource: parsed.contextSource,
     contextLabel: parsed.contextLabel,
   };
+}
+
+function isImportableSessionTool(tool: string): tool is ToolName {
+  return tool === "claude" || tool === "codex" || tool === "gemini";
 }
 
 function normalizeRemoteDirectory(input: string): string {
@@ -246,6 +250,8 @@ interface AppStoreContextShape {
   listWorkspacesByTarget: (targetId: string) => Workspace[];
   listWorkspaceChats: (workspaceId: string) => Promise<WorkspaceChatInfo[]>;
   openWorkspaceChat: (workspaceId: string, workspaceChatId: string) => Promise<AiSession>;
+  listDiscoveredSessions: (targetId: string) => Promise<WorkspaceChatInfo[]>;
+  openDiscoveredSession: (targetId: string, discoveredSessionId: string) => Promise<AiSession>;
   installDaemon: (targetId: string) => Promise<RunRecord>;
   startDaemonInstall: (targetId: string) => Promise<RunRecord>;
   cancelRun: (runId: string) => Promise<boolean>;
@@ -296,6 +302,7 @@ interface AppStoreContextShape {
   detachFromSession: (sessionId: string) => void;
   ensureSessionAttached: (sessionId: string) => void;
   refreshSessionHistory: (sessionId: string) => Promise<void>;
+  getSessionFollowUpSuggestions: (sessionId: string, limit?: number) => Promise<FollowUpSuggestion[]>;
   getRemoteUrl: (sessionId: string) => Promise<string>;
   getSchedules: () => Promise<import("../core/ai/Transport").ScheduledTask[]>;
   getSchedule: (scheduleId: string) => Promise<import("../core/ai/Transport").ScheduledTask>;
@@ -986,7 +993,23 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
       workspace.directory,
     );
     return allSessions
-      .filter((session) => session.tool === "claude" || session.tool === "codex")
+      .filter((session) => session.tool === "claude" || session.tool === "codex" || session.tool === "gemini")
+      .sort((a, b) => (a.updatedAt ?? "").localeCompare(b.updatedAt ?? ""))
+      .reverse();
+  }, []);
+
+  const listDiscoveredSessions = useCallback(async (targetId: string): Promise<WorkspaceChatInfo[]> => {
+    const target = stateRef.current.targets.find((t) => t.id === targetId);
+    if (!target) throw new Error("Target not found");
+
+    assertDaemonCompatible(target);
+
+    const credentials = await loadTargetCredentials(target.id);
+    if (!credentials) throw new Error("Target credentials are missing from secure store");
+
+    const allSessions = await getTransport(target).listSessionCatalog(target, credentials);
+    return allSessions
+      .filter((session) => isImportableSessionTool(session.tool))
       .sort((a, b) => (a.updatedAt ?? "").localeCompare(b.updatedAt ?? ""))
       .reverse();
   }, []);
@@ -1010,13 +1033,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     }
 
     const toolName = workspaceChat.tool as ToolName;
-    if (toolName !== "claude" && toolName !== "codex") {
+    if (toolName !== "claude" && toolName !== "codex" && toolName !== "gemini") {
       throw new Error(`Unsupported workspace chat tool '${workspaceChat.tool}'.`);
     }
 
-    const existing = workspaceChat.daemonSessionId
-      ? stateRef.current.sessions.find((session) => session.daemonSessionId === workspaceChat.daemonSessionId)
-      : stateRef.current.sessions.find((session) =>
+    const existing = (
+      workspaceChat.daemonSessionId
+        ? stateRef.current.sessions.find((session) => session.daemonSessionId === workspaceChat.daemonSessionId)
+        : undefined
+    ) ?? stateRef.current.sessions.find((session) =>
         session.targetId === workspace.targetId &&
         session.tool === toolName &&
         session.conversationId === workspaceChat.resumeId,
@@ -1082,25 +1107,30 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
 
         // Prefer native history when available so opening a daemon-linked chat
         // still loads the full CLI resume history from disk.
-        try {
-          const nativeHistory = await getTransport(target).getHistory(
-            target,
-            credentials,
-            {
-              tool: toolName,
-              resumeId: workspaceChat.resumeId,
-              cwd: workspace.directory,
-              limitLines: 8000,
-            },
-          );
-          const parsedNative = parseSessionHistory(toolName, nativeHistory, parseOptions);
-          if (parsedNative.messages.length >= parsed.messages.length) {
-            parsed = parsedNative;
+        if (toolName === "claude" || toolName === "codex") {
+          try {
+            const nativeHistory = await getTransport(target).getHistory(
+              target,
+              credentials,
+              {
+                tool: toolName,
+                resumeId: workspaceChat.resumeId,
+                cwd: workspace.directory,
+                limitLines: 8000,
+              },
+            );
+            const parsedNative = parseSessionHistory(toolName, nativeHistory, parseOptions);
+            if (parsedNative.messages.length >= parsed.messages.length) {
+              parsed = parsedNative;
+            }
+          } catch {
+            // Native resume history may not exist for daemon-only turns.
           }
-        } catch {
-          // Native resume history may not exist for daemon-only turns.
         }
       } else {
+        if (toolName !== "claude" && toolName !== "codex") {
+          throw new Error(`Native workspace chat history is not supported for '${toolName}'.`);
+        }
         const history = await getTransport(target).getHistory(
           target,
           credentials,
@@ -1157,6 +1187,165 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     touchWorkspace(workspace.id);
     return imported;
   }, [commit, listWorkspaceChats, touchWorkspace]);
+
+  const openDiscoveredSession = useCallback(async (
+    targetId: string,
+    discoveredSessionId: string,
+  ): Promise<AiSession> => {
+    const target = stateRef.current.targets.find((t) => t.id === targetId);
+    if (!target) throw new Error("Target not found");
+    const credentials = await loadTargetCredentials(target.id);
+    if (!credentials) throw new Error("Target credentials are missing from secure store");
+
+    const discoveredSessions = await listDiscoveredSessions(targetId);
+    const discoveredSession = discoveredSessions.find((session) =>
+      session.id === discoveredSessionId ||
+      session.daemonSessionId === discoveredSessionId ||
+      session.resumeId === discoveredSessionId,
+    );
+    if (!discoveredSession) {
+      throw new Error("Discovered session not found.");
+    }
+
+    const toolName = discoveredSession.tool as ToolName;
+    if (!isImportableSessionTool(toolName)) {
+      throw new Error(`Unsupported discovered session tool '${discoveredSession.tool}'.`);
+    }
+
+    const existing = (
+      discoveredSession.daemonSessionId
+        ? stateRef.current.sessions.find((session) => session.daemonSessionId === discoveredSession.daemonSessionId)
+        : undefined
+    ) ?? stateRef.current.sessions.find((session) =>
+        session.targetId === targetId &&
+        session.tool === toolName &&
+        session.conversationId === discoveredSession.resumeId,
+      );
+
+    let imported = existing ?? await sessionEngineRef.current!.importSession(
+      discoveredSession.origin === "daemon" && discoveredSession.daemonSessionId
+        ? {
+          targetId,
+          daemonSessionId: discoveredSession.daemonSessionId,
+          tool: toolName,
+          conversationId: discoveredSession.conversationId ?? discoveredSession.resumeId,
+          workingDirectory: discoveredSession.workingDirectory,
+          model: discoveredSession.model,
+          daemonOutputOffset: discoveredSession.outputLines,
+        }
+        : {
+          targetId,
+          tool: toolName,
+          conversationId: discoveredSession.resumeId,
+          workingDirectory: discoveredSession.workingDirectory,
+          model: discoveredSession.model,
+        },
+    );
+
+    try {
+      const parseOptions = {
+        messageLimit: 200,
+        modelId: discoveredSession.model ?? imported.model,
+      } as const;
+      let daemonHistoryLineCount = imported.daemonOutputOffset;
+      let parsed = undefined as ReturnType<typeof parseSessionHistory> | undefined;
+
+      if (discoveredSession.origin === "daemon" && discoveredSession.daemonSessionId) {
+        const daemonHistory = await getTransport(target).getHistory(
+          target,
+          credentials,
+          {
+            daemonSessionId: discoveredSession.daemonSessionId,
+            limitLines: 8000,
+          },
+        );
+        daemonHistoryLineCount = daemonHistory.lineCount;
+        parsed = parseSessionHistory(toolName, daemonHistory, parseOptions);
+
+        if (
+          discoveredSession.resumeId &&
+          discoveredSession.workingDirectory &&
+          (toolName === "claude" || toolName === "codex")
+        ) {
+          try {
+            const nativeHistory = await getTransport(target).getHistory(
+              target,
+              credentials,
+              {
+                tool: toolName,
+                resumeId: discoveredSession.resumeId,
+                cwd: discoveredSession.workingDirectory,
+                limitLines: 8000,
+              },
+            );
+            const parsedNative = parseSessionHistory(toolName, nativeHistory, parseOptions);
+            if (parsedNative.messages.length >= parsed.messages.length) {
+              parsed = parsedNative;
+            }
+          } catch {
+            // Native resume history may not exist for daemon-only turns.
+          }
+        }
+      } else {
+        if (toolName !== "claude" && toolName !== "codex") {
+          throw new Error(`Native discovered session history is not supported for '${toolName}'.`);
+        }
+        const history = await getTransport(target).getHistory(
+          target,
+          credentials,
+          {
+            tool: toolName,
+            resumeId: discoveredSession.resumeId,
+            cwd: discoveredSession.workingDirectory,
+            limitLines: 8000,
+          },
+        );
+        parsed = parseSessionHistory(toolName, history, parseOptions);
+      }
+
+      if (!parsed) {
+        throw new Error("Failed to parse session history.");
+      }
+
+      const hydratedContext = getHydratedContext(imported, parsed);
+      const baseHydratedStatus = discoveredSession.origin === "daemon"
+        ? (discoveredSession.status === "running"
+          ? "running"
+          : discoveredSession.status === "failed"
+            ? "failed"
+            : discoveredSession.status === "cancelled"
+              ? "cancelled"
+              : "idle")
+        : "idle";
+      const hydratedStatus = deriveHydratedSessionStatus(baseHydratedStatus, parsed.messages);
+      const hydrated = await sessionEngineRef.current!.hydrateSession(imported.id, {
+        messages: parsed.messages,
+        turns: parsed.turns,
+        totalInputTokens: parsed.totalInputTokens,
+        totalOutputTokens: parsed.totalOutputTokens,
+        ...hydratedContext,
+        status: hydratedStatus,
+        daemonOutputOffset: daemonHistoryLineCount,
+      });
+      if (hydrated) {
+        imported = hydrated;
+      }
+    } catch {
+    }
+
+    if (
+      discoveredSession.origin === "daemon" &&
+      discoveredSession.daemonSessionId &&
+      discoveredSession.status === "running"
+    ) {
+      void sessionEngineRef.current!.attachToRunningSession(imported.id, {
+        target,
+        credentials,
+      });
+    }
+
+    return imported;
+  }, [listDiscoveredSessions]);
 
   const startDaemonInstall = useCallback(async (targetId: string): Promise<RunRecord> => {
     const script = buildDaemonScript("install");
@@ -1567,6 +1756,20 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     });
   }, []);
 
+  const getSessionFollowUpSuggestions = useCallback(async (sessionId: string, limit = 4): Promise<FollowUpSuggestion[]> => {
+    const session = stateRef.current.sessions.find((s) => s.id === sessionId);
+    if (!session?.daemonSessionId) return [];
+    const target = stateRef.current.targets.find((t) => t.id === session.targetId);
+    if (!target) return [];
+    const credentials = await loadTargetCredentials(target.id);
+    if (!credentials) return [];
+    try {
+      return await getTransport(target).sessionSuggest(target, credentials, session.daemonSessionId, limit);
+    } catch {
+      return [];
+    }
+  }, []);
+
   const getRemoteUrl = useCallback(async (sessionId: string): Promise<string> => {
     const session = stateRef.current.sessions.find((s) => s.id === sessionId);
     if (!session) throw new Error("Session not found");
@@ -1950,49 +2153,32 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
   const importDaemonSessions = useCallback(async (targetId: string): Promise<AiSession[]> => {
     const target = stateRef.current.targets.find((t) => t.id === targetId);
     if (!target) throw new Error("Target not found");
-    const credentials = await loadTargetCredentials(target.id);
-    if (!credentials) throw new Error("Target credentials are missing from secure store");
-
-    const daemonSessions = await getTransport(target).listSessions(target, credentials);
-
-    // Filter: only importable statuses, has conversationId, not already imported
+    const discoveredSessions = await listDiscoveredSessions(targetId);
+    const importableSessions = discoveredSessions.filter((session) => isImportableSessionTool(session.tool));
     const existingDaemonIds = new Set(
       stateRef.current.sessions
         .filter((s) => s.daemonSessionId)
         .map((s) => s.daemonSessionId),
     );
-    const importable = daemonSessions.filter((ds) => {
-      if (!ds.conversationId) return false;
-      if (existingDaemonIds.has(ds.id)) return false;
-      const importableStatuses = ["idle", "failed", "cancelled", "interrupted"];
-      return importableStatuses.includes(ds.status);
-    });
+    const existingNativeKeys = new Set(
+      stateRef.current.sessions
+        .filter((session) => session.targetId === targetId && session.conversationId)
+        .map((session) => `${session.tool}:${session.conversationId}`),
+    );
 
     const imported: AiSession[] = [];
-    for (const ds of importable) {
-      const toolName = ds.tool as ToolName;
-      if (!["claude", "codex", "gemini"].includes(toolName)) continue;
-      const workspaceId = ds.workingDirectory
-        ? stateRef.current.workspaces.find((workspace) =>
-          workspace.targetId === targetId &&
-          normalizeRemoteDirectory(workspace.directory) === normalizeRemoteDirectory(ds.workingDirectory!),
-        )?.id
-        : undefined;
-      const session = await sessionEngineRef.current!.importSession({
-        targetId,
-        workspaceId,
-        daemonSessionId: ds.id,
-        tool: toolName,
-        conversationId: ds.conversationId,
-        workingDirectory: ds.workingDirectory,
-        model: ds.model,
-        daemonOutputOffset: ds.outputLines,
-      });
-      imported.push(session);
+    for (const sessionInfo of importableSessions) {
+      if (sessionInfo.daemonSessionId && existingDaemonIds.has(sessionInfo.daemonSessionId)) {
+        continue;
+      }
+      if (existingNativeKeys.has(`${sessionInfo.tool}:${sessionInfo.resumeId}`)) {
+        continue;
+      }
+      imported.push(await openDiscoveredSession(targetId, sessionInfo.id));
     }
 
     return imported;
-  }, []);
+  }, [listDiscoveredSessions, openDiscoveredSession]);
 
   const setShowToolDetails = useCallback((value: boolean): void => {
     commit((prev) => ({ ...prev, showToolDetails: value }));
@@ -2105,6 +2291,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     listWorkspacesByTarget,
     listWorkspaceChats,
     openWorkspaceChat,
+    listDiscoveredSessions,
+    openDiscoveredSession,
     installDaemon,
     startDaemonInstall,
     cancelRun,
@@ -2142,6 +2330,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     detachFromSession,
     ensureSessionAttached,
     refreshSessionHistory,
+    getSessionFollowUpSuggestions,
     getRemoteUrl,
     getSchedules,
     getSchedule,
@@ -2204,6 +2393,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     listWorkspacesByTarget,
     listWorkspaceChats,
     openWorkspaceChat,
+    listDiscoveredSessions,
+    openDiscoveredSession,
     installDaemon,
     startDaemonInstall,
     cancelRun,
@@ -2234,6 +2425,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
     detachFromSession,
     ensureSessionAttached,
     refreshSessionHistory,
+    getSessionFollowUpSuggestions,
     getTeams,
     getTeam,
     createTeam,

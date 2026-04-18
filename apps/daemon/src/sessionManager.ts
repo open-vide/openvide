@@ -1,13 +1,85 @@
 import { loadState, saveState } from "./stateStore.js";
 import { ensureSessionDir, readOutputLines, removeSessionDir } from "./outputStore.js";
 import { spawnTurn, patchCodexSessionSource, type RunningProcess } from "./processRunner.js";
+import { spawnCodexAppServerTurn } from "./codexAppServerRunner.js";
 import { sendPushNotification } from "./pushNotify.js";
 import { purgeExpiredBridgeClientSessions } from "./bridgeAuth.js";
 import { newId, nowISO, log, logError } from "./utils.js";
-import type { DaemonState, SessionRecord, SessionStatus, Tool, IpcResponse } from "./types.js";
+import type {
+  DaemonState,
+  PromptRecord,
+  SessionExecutionBackend,
+  SessionRecord,
+  SessionStatus,
+  Tool,
+  IpcResponse,
+} from "./types.js";
 
 const runningProcesses = new Map<string, RunningProcess>();
 let state: DaemonState = { version: 1, sessions: {} };
+
+const BUILT_IN_PROMPTS: PromptRecord[] = [
+  {
+    id: "builtin_explain",
+    label: "Explain what you did",
+    prompt: "Explain what you did",
+    isBuiltIn: true,
+  },
+  {
+    id: "builtin_changes",
+    label: "Show changes",
+    prompt: "Show me the changes you made",
+    isBuiltIn: true,
+  },
+  {
+    id: "builtin_tests",
+    label: "Run tests",
+    prompt: "Run the tests",
+    isBuiltIn: true,
+  },
+  {
+    id: "builtin_continue",
+    label: "Continue",
+    prompt: "Continue",
+    isBuiltIn: true,
+  },
+  {
+    id: "builtin_undo",
+    label: "Undo last change",
+    prompt: "Undo the last change you made",
+    isBuiltIn: true,
+  },
+  {
+    id: "builtin_review",
+    label: "Review for bugs",
+    prompt: "Review the code for bugs and potential issues",
+    isBuiltIn: true,
+  },
+  {
+    id: "builtin_refactor",
+    label: "Suggest refactoring",
+    prompt: "Suggest refactoring improvements for the code",
+    isBuiltIn: true,
+  },
+  {
+    id: "builtin_status",
+    label: "Current status",
+    prompt: "What is the current status? Summarize what has been done and what remains.",
+    isBuiltIn: true,
+  },
+  {
+    id: "builtin_commit",
+    label: "Commit changes",
+    prompt: "Commit the changes with an appropriate commit message",
+    isBuiltIn: true,
+  },
+  {
+    id: "builtin_explain_error",
+    label: "Explain error",
+    prompt: "Explain the error and suggest how to fix it",
+    isBuiltIn: true,
+  },
+];
 
 interface SessionCreationMeta {
   runKind?: "interactive" | "scheduled" | "team";
@@ -27,13 +99,23 @@ function extractLastProviderError(sessionId: string): string | undefined {
         const parsed = JSON.parse(entry.line) as {
           type?: string;
           message?: string;
-          error?: { message?: string };
+          error?: string | { message?: string };
         };
         if (parsed.type === "error" && typeof parsed.message === "string" && parsed.message.trim()) {
           return parsed.message.trim();
         }
-        if (parsed.type === "turn.failed" && typeof parsed.error?.message === "string" && parsed.error.message.trim()) {
-          return parsed.error.message.trim();
+        if (parsed.type === "turn.failed") {
+          if (typeof parsed.error === "string" && parsed.error.trim()) {
+            return parsed.error.trim();
+          }
+          if (
+            parsed.error
+            && typeof parsed.error === "object"
+            && typeof parsed.error.message === "string"
+            && parsed.error.message.trim()
+          ) {
+            return parsed.error.message.trim();
+          }
         }
       } catch {
         if (entry.t === "e" && entry.line.trim()) {
@@ -47,6 +129,13 @@ function extractLastProviderError(sessionId: string): string | undefined {
   return undefined;
 }
 
+function defaultExecutionBackend(tool: Tool, conversationId?: string, outputLines = 0): SessionExecutionBackend {
+  if (tool === "codex" && conversationId && outputLines === 0) {
+    return "codex_app_server";
+  }
+  return "cli";
+}
+
 // ── State access ──
 
 export function getState(): DaemonState {
@@ -55,6 +144,7 @@ export function getState(): DaemonState {
 
 export function init(): void {
   state = loadState();
+  state.prompts = Array.isArray(state.prompts) ? state.prompts : [];
   let needsPersist = false;
 
   if (state.bridge && purgeExpiredBridgeClientSessions(state.bridge)) {
@@ -90,6 +180,10 @@ export function init(): void {
         session.lastTurn.error = "daemon restarted";
       }
     }
+    if (!session.executionBackend) {
+      session.executionBackend = defaultExecutionBackend(session.tool, session.conversationId, session.outputLines);
+      needsPersist = true;
+    }
   }
 
   if (needsPersist) {
@@ -102,6 +196,45 @@ export function init(): void {
 
 export function persist(): void {
   saveState(state);
+}
+
+// ── Prompt library ──
+
+export function listPrompts(): PromptRecord[] {
+  const customPrompts = (state.prompts ?? [])
+    .map((prompt) => ({ ...prompt, isBuiltIn: false }))
+    .sort((left, right) => {
+      const leftTs = left.updatedAt ?? left.createdAt ?? "";
+      const rightTs = right.updatedAt ?? right.createdAt ?? "";
+      return leftTs.localeCompare(rightTs);
+    });
+  return [...BUILT_IN_PROMPTS, ...customPrompts];
+}
+
+export function addPrompt(label: string, prompt: string): PromptRecord {
+  const now = nowISO();
+  const record: PromptRecord = {
+    id: newId("prompt"),
+    label,
+    prompt,
+    isBuiltIn: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  state.prompts = [...(state.prompts ?? []), record];
+  persist();
+  return record;
+}
+
+export function removePrompt(id: string): boolean {
+  const prompts = state.prompts ?? [];
+  const next = prompts.filter((prompt) => prompt.id !== id);
+  if (next.length === prompts.length) {
+    return false;
+  }
+  state.prompts = next;
+  persist();
+  return true;
 }
 
 // ── Push token ──
@@ -133,6 +266,7 @@ export function createSession(
     id,
     tool,
     status: "idle",
+    executionBackend: defaultExecutionBackend(tool, conversationId),
     runKind: metadata?.runKind ?? "interactive",
     scheduleId: metadata?.scheduleId,
     scheduleName: metadata?.scheduleName,
@@ -176,7 +310,26 @@ export function listSessions(): SessionRecord[] {
   return Object.values(state.sessions).filter((session) => !session.pendingRemoval);
 }
 
+export function listDismissedNativeIds(): string[] {
+  return [...(state.dismissedNativeIds ?? [])];
+}
+
+export function dismissNativeSession(id: string): void {
+  const current = state.dismissedNativeIds ?? [];
+  if (current.includes(id)) return;
+  state.dismissedNativeIds = [...current, id];
+  persist();
+  log(`Dismissed native session ${id}`);
+}
+
 export function removeSession(id: string): boolean {
+  // Native sessions (e.g. "codex:xxx", "claude:xxx") live in the native tool's
+  // own storage and are re-imported on every list. To make "delete" stick, we
+  // track their IDs in a dismissed set and filter them from native listings.
+  if (id.startsWith("codex:") || id.startsWith("claude:")) {
+    dismissNativeSession(id);
+    return true;
+  }
   const session = state.sessions[id];
   if (!session) return false;
 
@@ -240,24 +393,32 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
   }
 
   let lastDeltaPersistTime = Date.now();
-  const proc = spawnTurn(
-    session,
-    prompt,
-    { mode: turnOpts?.mode, model: effectiveModel },
-    (lines, bytes) => {
-      session.outputLines += lines;
-      session.outputBytes += bytes;
-      session.updatedAt = nowISO();
-      // Persist every 2s so outputLines/outputBytes survive daemon crashes
-      const now = Date.now();
-      if (now - lastDeltaPersistTime >= 2000) {
-        lastDeltaPersistTime = now;
-        persist();
-      }
-    },
-    (result) => {
+  const handleOutputDelta = (lines: number, bytes: number): void => {
+    session.outputLines += lines;
+    session.outputBytes += bytes;
+    session.updatedAt = nowISO();
+    // Persist every 2s so outputLines/outputBytes survive daemon crashes
+    const now = Date.now();
+    if (now - lastDeltaPersistTime >= 2000) {
+      lastDeltaPersistTime = now;
+      persist();
+    }
+  };
+
+  const startRunner = (backend: SessionExecutionBackend): RunningProcess => {
+    const onFinished = (result: { exitCode: number | null; conversationId?: string; resumeUnsupported?: boolean; fallbackToCli?: boolean }): void => {
       runningProcesses.delete(id);
       session.pid = undefined;
+
+      if (result.fallbackToCli && session.tool === "codex" && backend === "codex_app_server") {
+        session.executionBackend = "cli";
+        session.updatedAt = nowISO();
+        const fallbackProc = startRunner("cli");
+        runningProcesses.set(id, fallbackProc);
+        session.pid = fallbackProc.pid ?? fallbackProc.child?.pid;
+        persist();
+        return;
+      }
 
       if (session.pendingRemoval) {
         removeSessionDir(id);
@@ -278,6 +439,7 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
       if (result.resumeUnsupported && session.tool === "codex") {
         // Avoid repeated failing resume attempts on older Codex CLI builds.
         session.conversationId = undefined;
+        session.executionBackend = "cli";
       }
 
       // State transition
@@ -286,7 +448,7 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
       } else if (result.exitCode === 0) {
         session.status = "idle"; // Ready for next turn
         // Patch Codex exec sessions so they appear in `codex resume` picker
-        if (session.tool === "codex" && result.conversationId) {
+        if (session.tool === "codex" && result.conversationId && session.executionBackend !== "codex_app_server") {
           patchCodexSessionSource(result.conversationId);
         }
       } else {
@@ -318,11 +480,31 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
           );
         }
       }
-    },
-  );
+    };
+
+    if (backend === "codex_app_server") {
+      return spawnCodexAppServerTurn(
+        session,
+        prompt,
+        { mode: turnOpts?.mode, model: effectiveModel },
+        handleOutputDelta,
+        onFinished,
+      );
+    }
+
+    return spawnTurn(
+      session,
+      prompt,
+      { mode: turnOpts?.mode, model: effectiveModel },
+      handleOutputDelta,
+      onFinished,
+    );
+  };
+
+  const proc = startRunner(session.executionBackend ?? "cli");
 
   runningProcesses.set(id, proc);
-  session.pid = proc.child.pid;
+  session.pid = proc.pid ?? proc.child?.pid;
   persist();
 
   return { ok: true, session: { ...session } };

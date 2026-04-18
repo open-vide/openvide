@@ -1,0 +1,292 @@
+/* ── OpenVide G2 — Design Extensions ── */
+/* Extends even-toolkit tokens with app-specific animations and surfaces */
+
+/* ── Breathing animations for live indicators ── */
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes breathe-fast {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── Liquid fill for progress bars ── */
+@keyframes liquid-fill {
+  from { transform: scaleX(0); transform-origin: left; }
+  to { transform: scaleX(1); transform-origin: left; }
+}
+
+/* ── Streaming text shimmer ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ── Message slide-in ── */
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Waveform bar bounce ── */
+@keyframes wave-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+/* ── Subtle shake for errors ── */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-3px); }
+  40%, 80% { transform: translateX(3px); }
+}
+
+/* ── Button press spring ── */
+@keyframes press {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+
+/* ── Status classes ── */
+.status-breathe {
+  animation: breathe 2s ease-in-out infinite;
+}
+
+.status-breathe-fast {
+  animation: breathe-fast 1.2s ease-in-out infinite;
+}
+
+.shimmer-bg {
+  background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.08) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+.msg-enter {
+  animation: msg-in 200ms ease-out;
+}
+
+.press-spring:active {
+  animation: press 100ms ease;
+}
+
+/* ── Code surface (dark) ── */
+.code-surface {
+  background: #1a1a1a;
+  color: #e0e0e0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.code-surface .line-num {
+  color: #555;
+  user-select: none;
+  text-align: right;
+  padding-right: 12px;
+  min-width: 32px;
+  flex-shrink: 0;
+}
+
+.code-surface .line-added { color: #4ade80; background: rgba(74, 222, 128, 0.08); }
+.code-surface .line-removed { color: #f87171; background: rgba(248, 113, 113, 0.08); }
+.code-surface .line-meta { color: #60a5fa; background: rgba(96, 165, 250, 0.06); }
+
+/* ── Dense data mono ── */
+.data-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--color-text-dim);
+}
+
+/* ── Provider identity colors ── */
+.provider-claude { --provider-color: #C4704B; }
+.provider-codex { --provider-color: #10A37F; }
+.provider-gemini { --provider-color: #4285F4; }
+.provider-border { border-left: 2px solid var(--provider-color, var(--color-accent)); }
+
+/* ── Chat bubble shapes ── */
+.bubble-user {
+  border-radius: 12px 12px 4px 12px;
+}
+.bubble-assistant {
+  border-radius: 12px 12px 12px 4px;
+}
+.bubble-system {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bubble-system::before,
+.bubble-system::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+/* ── Input pill ── */
+.input-pill {
+  border-radius: 24px;
+  min-height: 48px;
+  background: var(--color-surface-light);
+  display: flex;
+  align-items: center;
+  transition: box-shadow 200ms ease;
+}
+.input-pill:focus-within {
+  box-shadow: 0 0 0 2px var(--color-accent-alpha);
+}
+
+/* ── Waveform bars ── */
+.waveform-bar {
+  width: 3px;
+  height: 24px;
+  border-radius: 1.5px;
+  background: var(--color-text-dim);
+  transform-origin: center;
+}
+
+/* ── Stat card grid ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.stat-card {
+  background: var(--color-surface);
+  border-radius: 6px;
+  padding: 12px;
+  text-align: center;
+}
+.stat-card .stat-value {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  color: var(--color-text);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+.stat-card .stat-label {
+  font-size: 11px;
+  letter-spacing: -0.11px;
+  color: var(--color-text-dim);
+  margin-top: 4px;
+}
+
+/* ── Progress bar ── */
+.progress-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-surface-lighter);
+  overflow: hidden;
+}
+.progress-bar .progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--color-accent);
+  transition: width 500ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Section header with accent line ── */
+.section-accent {
+  position: relative;
+  padding-left: 8px;
+}
+.section-accent::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--color-positive);
+}
+
+/* ── Floating action button ── */
+.fab {
+  position: fixed;
+  bottom: 80px;
+  right: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-text-highlight);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  border: none;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  z-index: 20;
+}
+.fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+.fab:active {
+  transform: scale(0.95);
+}
+
+/* ── Smooth card hover ── */
+.card-hover {
+  transition: box-shadow 200ms ease, transform 200ms ease;
+}
+.card-hover:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+/* ── Drawer brand mark ── */
+.openvide-shell > div:first-child > div:first-child > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  gap: 3px;
+  line-height: 1;
+}
+
+.openvide-shell > div:first-child > div:first-child > span::before {
+  content: '';
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  opacity: 0.92;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  background-image: url('/branding/codex-light.svg');
+  transform: translateY(1px);
+}
+
+/* ── Kanban column ── */
+.kanban-col {
+  min-width: 260px;
+  max-width: 300px;
+  flex-shrink: 0;
+}
+.kanban-col-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 12px;
+}
+.kanban-col-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* ── Tooltip / copy feedback ── */
+.copy-flash {
+  animation: press 150ms ease;
+  color: var(--color-positive);
+}

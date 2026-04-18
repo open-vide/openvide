@@ -26,15 +26,40 @@ function applyTailLimit(lines: string[], limitLines: number): { lines: string[];
   };
 }
 
+const MAX_JSONL_BYTES = 16 * 1024 * 1024; // 16 MB — anything larger gets tailed
+
 async function readJsonlLines(filePath: string): Promise<string[]> {
-  const content = await fs.readFile(filePath, "utf8");
+  let content: string;
+  try {
+    const stat = await fs.stat(filePath);
+    if (stat.size > MAX_JSONL_BYTES) {
+      // Tail the last 16 MB so huge Codex session files don't blow memory
+      // or hang the daemon's response to the webview.
+      const fd = await fs.open(filePath, "r");
+      try {
+        const start = stat.size - MAX_JSONL_BYTES;
+        const buf = Buffer.alloc(MAX_JSONL_BYTES);
+        await fd.read(buf, 0, MAX_JSONL_BYTES, start);
+        // Drop the first (likely partial) line.
+        content = buf.toString("utf8");
+        const nl = content.indexOf("\n");
+        if (nl >= 0) content = content.slice(nl + 1);
+      } finally {
+        await fd.close();
+      }
+    } else {
+      content = await fs.readFile(filePath, "utf8");
+    }
+  } catch {
+    return [];
+  }
   return content
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 }
 
-async function findClaudeSessionFile(sessionId: string, cwd?: string): Promise<string | undefined> {
+export async function findClaudeSessionFile(sessionId: string, cwd?: string): Promise<string | undefined> {
   const root = path.join(os.homedir(), ".claude", "projects");
   const targetCwd = cwd ? normalizeWorkspacePath(cwd) : undefined;
   const wanted = `${sessionId}.jsonl`;
@@ -138,7 +163,7 @@ async function readPrefix(filePath: string, maxBytes: number): Promise<string> {
   }
 }
 
-async function findCodexSessionFile(sessionId: string, cwd?: string): Promise<string | undefined> {
+export async function findCodexSessionFile(sessionId: string, cwd?: string): Promise<string | undefined> {
   const root = path.join(os.homedir(), ".codex", "sessions");
   const targetCwd = cwd ? normalizeWorkspacePath(cwd) : undefined;
   const queue: string[] = [root];

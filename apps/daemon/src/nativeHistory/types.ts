@@ -1,7 +1,7 @@
 import type { NativeSessionRecord, SessionRecord, WorkspaceSessionRecord } from "../types.js";
 
 export interface ListNativeSessionsOptions {
-  cwd: string;
+  cwd?: string;
   tool?: "claude" | "codex" | "all";
 }
 

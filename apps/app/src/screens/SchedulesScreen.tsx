@@ -477,12 +477,12 @@ export function SchedulesScreen({ navigation }: Props): JSX.Element {
               <View className="gap-2">
                 <Text className="text-dimmed text-xs">Tool</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                  {(["claude", "codex"] as Tool[]).map((tool) =>
+                  {(["claude", "codex", "gemini"] as Tool[]).map((tool) =>
                     renderChip(
                       tool,
                       draft.tool === tool,
                       () => setDraft((current) => ({ ...current, tool })),
-                      tool === "claude" || tool === "codex" ? <ProviderIcon tool={tool} size={14} /> : <Icon name="cpu" size={12} color={draft.tool === tool ? primaryForeground : dimmed} />,
+                      <ProviderIcon tool={tool} size={14} />,
                     ),
                   )}
                 </ScrollView>

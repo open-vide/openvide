@@ -81,7 +81,7 @@ export function TeamChatScreen({ route, navigation }: Props): JSX.Element {
 
   const renderMessage = useCallback(({ item }: { item: TeamMessageInfo }) => {
     const inferredTool = item.fromTool ?? team?.members.find((member) => member.name === item.from)?.tool;
-    const isAgent = inferredTool === "claude" || inferredTool === "codex";
+    const isAgent = inferredTool === "claude" || inferredTool === "codex" || inferredTool === "gemini";
     const recipientLabel = item.to === "*" || item.to === "team"
       ? "team"
       : item.to === "user" || item.to === "you"
@@ -91,7 +91,7 @@ export function TeamChatScreen({ route, navigation }: Props): JSX.Element {
     return (
       <GlassContainer variant="card" className="p-3 gap-1.5 mx-4 mb-2">
         <View className="flex-row items-center gap-2">
-          {isAgent ? <ProviderIcon tool={inferredTool as "claude" | "codex"} size={12} /> : <Icon name="user" size={12} color={dimmed} />}
+          {isAgent ? <ProviderIcon tool={inferredTool as string} size={12} /> : <Icon name="user" size={12} color={dimmed} />}
           <Text className="text-dimmed text-xs">
             {item.from} → {recipientLabel}
           </Text>
@@ -119,7 +119,7 @@ export function TeamChatScreen({ route, navigation }: Props): JSX.Element {
                 className="px-3 py-2 rounded-full active:opacity-80 flex-row items-center gap-2"
                 style={{ backgroundColor: selected ? accent : "rgba(255,255,255,0.06)" }}
               >
-                {option.tool === "claude" || option.tool === "codex" ? (
+                {option.tool === "claude" || option.tool === "codex" || option.tool === "gemini" ? (
                   <ProviderIcon tool={option.tool} size={14} />
                 ) : (
                   <Icon name={option.id === "*" ? "send" : "user"} size={12} color={selected ? primaryForeground : dimmed} />

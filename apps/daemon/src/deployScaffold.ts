@@ -15,7 +15,7 @@ export interface DeployScaffoldOptions {
   bridgePort: number;
   bindHost: string;
   defaultCwd?: string;
-  evenAiTool?: "claude" | "codex";
+  evenAiTool?: "claude" | "codex" | "gemini";
   evenAiMode?: "new" | "last" | "pinned";
 }
 

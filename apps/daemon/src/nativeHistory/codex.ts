@@ -82,8 +82,17 @@ function isCodexBootstrapPrompt(text: string): boolean {
   return false;
 }
 
-function extractFirstUserPrompt(lines: string[]): string | undefined {
+function isOpenVideInternalPrompt(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lower.includes("you generate short follow-up prompts for an existing ai coding chat")
+    || lower.includes('return strict json only in this exact shape: {"suggestions"')
+  );
+}
+
+function extractFirstUserPrompt(lines: string[]): { title?: string; internalPrompt: boolean } {
   let fallback: string | undefined;
+  let internalPrompt = false;
   for (const line of lines) {
     let obj: JsonValue;
     try {
@@ -109,8 +118,12 @@ function extractFirstUserPrompt(lines: string[]): string | undefined {
           if (!fallback) {
             fallback = normalizeTitle(cleaned);
           }
+          if (isOpenVideInternalPrompt(cleaned)) {
+            internalPrompt = true;
+            continue;
+          }
           if (!isCodexBootstrapPrompt(cleaned)) {
-            return normalizeTitle(cleaned);
+            return { title: normalizeTitle(cleaned), internalPrompt: false };
           }
         }
       }
@@ -126,13 +139,17 @@ function extractFirstUserPrompt(lines: string[]): string | undefined {
         if (!fallback) {
           fallback = normalizeTitle(cleaned);
         }
+        if (isOpenVideInternalPrompt(cleaned)) {
+          internalPrompt = true;
+          continue;
+        }
         if (!isCodexBootstrapPrompt(cleaned)) {
-          return normalizeTitle(cleaned);
+          return { title: normalizeTitle(cleaned), internalPrompt: false };
         }
       }
     }
   }
-  return fallback;
+  return { title: internalPrompt ? undefined : fallback, internalPrompt };
 }
 
 function parseSessionMeta(lines: string[]): { sessionId?: string; cwd?: string; createdAt?: string; source?: string } {
@@ -187,9 +204,9 @@ async function loadCodexThreadTitles(): Promise<Map<string, string>> {
   }
 }
 
-export async function listCodexNativeSessions(cwd: string): Promise<NativeSessionRecord[]> {
+export async function listCodexNativeSessions(cwd?: string): Promise<NativeSessionRecord[]> {
   const sessionsRoot = path.join(os.homedir(), ".codex", "sessions");
-  const targetCwd = normalizeWorkspacePath(cwd);
+  const targetCwd = cwd ? normalizeWorkspacePath(cwd) : undefined;
   const files = await collectJsonlFiles(sessionsRoot);
   const threadTitles = await loadCodexThreadTitles();
   const dedup = new Map<string, NativeSessionRecord>();
@@ -206,7 +223,7 @@ export async function listCodexNativeSessions(cwd: string): Promise<NativeSessio
 
     const { sessionId, cwd: sessionCwd, createdAt, source } = parseSessionMeta(lines);
     if (!sessionId || !sessionCwd) continue;
-    if (normalizeWorkspacePath(sessionCwd) !== targetCwd) continue;
+    if (targetCwd && normalizeWorkspacePath(sessionCwd) !== targetCwd) continue;
     if (!isResumeVisibleSource(source)) continue;
 
     let updatedAt: string | undefined;
@@ -217,7 +234,9 @@ export async function listCodexNativeSessions(cwd: string): Promise<NativeSessio
       // no-op
     }
 
-    const title = threadTitles.get(sessionId) ?? extractFirstUserPrompt(lines);
+    const extractedPrompt = extractFirstUserPrompt(lines);
+    if (extractedPrompt.internalPrompt) continue;
+    const title = threadTitles.get(sessionId) ?? extractedPrompt.title;
     const candidate: NativeSessionRecord = {
       id: `codex:${sessionId}`,
       tool: "codex",

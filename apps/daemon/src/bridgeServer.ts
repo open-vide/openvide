@@ -16,13 +16,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { verifyJwt } from "./jwt.js";
-import { ensureBridgeTls } from "./certs.js";
+import { detectTailscaleIp, detectTailscaleHostname, getTailscaleTls } from "./certs.js";
 import { routeCommand } from "./ipc.js";
 import { handleCompletions, handleCompletionsStreaming } from "./completions.js";
 import { daemonDir, log, logError } from "./utils.js";
 import type { BridgeConfig } from "./types.js";
 import { registerTeamBroadcast } from "./teamManager.js";
 import { persist } from "./sessionManager.js";
+import { subscribeNativeLive, parseNativeSessionId } from "./nativeLiveWatcher.js";
 import {
   authenticateBridgeToken,
   createBridgeClientSession,
@@ -44,7 +45,9 @@ let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
 interface WsClient {
   socket: net.Socket;
   id: string;
-  subscriptions: Map<string, ReturnType<typeof setInterval>>;
+  // Value is a cleanup function — could tear down a setInterval poller
+  // (daemon-sourced sessions) or an fs.watch unsubscribe (native live sessions).
+  subscriptions: Map<string, () => void>;
   alive: boolean;
 }
 
@@ -254,8 +257,8 @@ function sendWsJson(client: WsClient, data: unknown): void {
 
 function cleanupClient(client: WsClient): void {
   if (!clients.has(client.id)) return;
-  for (const [, interval] of client.subscriptions) {
-    clearInterval(interval);
+  for (const [, dispose] of client.subscriptions) {
+    try { dispose(); } catch { /* ignore */ }
   }
   client.subscriptions.clear();
   clients.delete(client.id);
@@ -332,6 +335,19 @@ async function handleWsMessage(client: WsClient, raw: string): Promise<void> {
 function subscribeOutput(client: WsClient, sessionId: string): void {
   unsubscribeOutput(client, sessionId);
 
+  // Native session ids (e.g. "claude:uuid", "codex:uuid") don't live in the
+  // daemon's sessions/ tree. Route them to the live native watcher so the
+  // webview sees external CLI updates in real time.
+  const nativeRef = parseNativeSessionId(sessionId);
+  if (nativeRef) {
+    const unsub = subscribeNativeLive(nativeRef, (line) => {
+      sendWsJson(client, { type: "output", sessionId, line });
+    });
+    client.subscriptions.set(sessionId, unsub);
+    log(`[bridge:ws] Client ${client.id} subscribed to NATIVE session ${sessionId}`);
+    return;
+  }
+
   const outputPath = path.join(SESSIONS_DIR, sessionId, "output.jsonl");
   let byteOffset = 0;
 
@@ -373,14 +389,14 @@ function subscribeOutput(client: WsClient, sessionId: string): void {
     }
   }, 250);
 
-  client.subscriptions.set(sessionId, interval);
+  client.subscriptions.set(sessionId, () => clearInterval(interval));
   log(`[bridge:ws] Client ${client.id} subscribed to session ${sessionId}`);
 }
 
 function unsubscribeOutput(client: WsClient, sessionId: string): void {
-  const existing = client.subscriptions.get(sessionId);
-  if (existing) {
-    clearInterval(existing);
+  const dispose = client.subscriptions.get(sessionId);
+  if (dispose) {
+    try { dispose(); } catch { /* ignore */ }
     client.subscriptions.delete(sessionId);
   }
 }
@@ -706,7 +722,9 @@ export function startBridge(config: BridgeConfig): void {
     // Synchronously clean up without nulling activeConfig
     if (keepaliveTimer) { clearInterval(keepaliveTimer); keepaliveTimer = null; }
     for (const [, client] of clients) {
-      for (const [, interval] of client.subscriptions) clearInterval(interval);
+      for (const [, dispose] of client.subscriptions) {
+        try { dispose(); } catch { /* ignore */ }
+      }
       client.subscriptions.clear();
       try { client.socket.destroy(); } catch { /* ignore */ }
     }
@@ -717,24 +735,33 @@ export function startBridge(config: BridgeConfig): void {
 
   registerTeamBroadcast(broadcastToClients);
 
-  if (config.tls) {
-    const tls = ensureBridgeTls();
-    server = https.createServer({ cert: tls.cert, key: tls.key }, requestHandler);
+  const wantTls = config.tls !== false;
+  // Use the Tailscale HTTPS cert only when TLS is enabled in daemon config.
+  const tsTls = wantTls ? getTailscaleTls() : null;
+  if (tsTls) {
+    server = https.createServer({ cert: tsTls.cert, key: tsTls.key }, requestHandler);
   } else {
     server = http.createServer(requestHandler);
   }
 
   server.on("upgrade", handleUpgrade);
 
-  server.on("error", (err) => {
+  server.on("error", (err: Error) => {
     logError("[bridge] Server error:", err.message);
   });
 
   const bindHost = config.bindHost?.trim() || "::";
+  const tsIp = detectTailscaleIp();
+  const tsHostname = tsTls?.hostname;
 
   server.listen(config.port, bindHost, () => {
-    const proto = config.tls ? "HTTPS" : "HTTP";
+    const proto = tsTls || wantTls ? "HTTPS" : "HTTP";
     log(`[bridge] ${proto}+WebSocket bridge listening on ${bindHost}:${config.port}`);
+    if (tsHostname) {
+      log(`[bridge] Tailscale HTTPS: https://${tsHostname}:${config.port}`);
+    } else if (!wantTls && tsIp) {
+      log(`[bridge] Tailscale: http://${tsIp}:${config.port}`);
+    }
   });
 
   // Keepalive ping every 30s
@@ -760,8 +787,8 @@ export function stopBridge(): Promise<void> {
 
     // Cleanup all WS clients
     for (const [, client] of clients) {
-      for (const [, interval] of client.subscriptions) {
-        clearInterval(interval);
+      for (const [, dispose] of client.subscriptions) {
+        try { dispose(); } catch { /* ignore */ }
       }
       client.subscriptions.clear();
       try { client.socket.destroy(); } catch { /* ignore */ }

@@ -6,11 +6,12 @@ import * as os from "node:os";
 import { daemonDir, log, logError } from "./utils.js";
 import * as sm from "./sessionManager.js";
 import type { IpcRequest, IpcResponse, Tool, BridgeConfig, BridgeConfigSnapshot } from "./types.js";
-import { listNativeSessionsForWorkspace, mergeWorkspaceSessions } from "./nativeHistory/index.js";
+import { listNativeSessionsCatalog, listNativeSessionsForWorkspace, mergeDiscoveredSessions, mergeWorkspaceSessions } from "./nativeHistory/index.js";
 import { readHistoryForDaemonSession, readHistoryForNativeSession } from "./historyStore.js";
 import { listCodexModels } from "./codexModels.js";
 import { generateSecret, createJwt, parseDuration } from "./jwt.js";
 import { startBridge, stopBridge, isBridgeRunning, getBridgeInfo, updateBridgeConfig, getLocalIp } from "./bridgeServer.js";
+import { detectTailscaleIp, detectTailscaleHostname, getTailscaleTls } from "./certs.js";
 import { encodeQR } from "./qrText.js";
 import * as tm from "./teamManager.js";
 import * as sched from "./scheduleManager.js";
@@ -100,7 +101,10 @@ function snapshotBridgeConfig(config: BridgeConfig): BridgeConfigSnapshot {
     tls: config.tls !== false,
     bindHost: config.bindHost?.trim() || "::",
     defaultCwd: config.defaultCwd?.trim() || os.homedir(),
-    evenAiTool: config.evenAiTool === "codex" ? "codex" : "claude",
+    evenAiTool:
+      config.evenAiTool === "codex" || config.evenAiTool === "gemini"
+        ? config.evenAiTool
+        : "claude",
     evenAiMode:
       config.evenAiMode === "new" || config.evenAiMode === "pinned"
         ? config.evenAiMode
@@ -144,6 +148,32 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
         totalSessions: sessions.length,
         tools,
       };
+    }
+
+    case "prompt.list": {
+      return { ok: true, prompts: sm.listPrompts() };
+    }
+
+    case "prompt.add": {
+      const label = typeof req.label === "string" ? req.label.trim() : "";
+      const prompt = typeof req.prompt === "string" ? req.prompt.trim() : "";
+      if (!label || !prompt) {
+        return { ok: false, error: "Missing required: label, prompt" };
+      }
+      const record = sm.addPrompt(label, prompt);
+      return { ok: true, prompts: sm.listPrompts(), prompt: record };
+    }
+
+    case "prompt.remove": {
+      const id = typeof req.id === "string" ? req.id.trim() : "";
+      if (!id) {
+        return { ok: false, error: "Missing required: id" };
+      }
+      const removed = sm.removePrompt(id);
+      if (!removed) {
+        return { ok: false, error: `Prompt ${id} not found` };
+      }
+      return { ok: true, prompts: sm.listPrompts() };
     }
 
     case "session.create": {
@@ -212,12 +242,33 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
       return { ok: true, sessions };
     }
 
+    case "session.catalog": {
+      const startedAt = Date.now();
+      const daemonSessions = sm.listSessions();
+      const nativeSessions = await listNativeSessionsCatalog({ tool: "all" });
+      const sessions = mergeDiscoveredSessions({
+        daemonSessions,
+        nativeSessions,
+      });
+      log(
+        `session.catalog daemon=${daemonSessions.length} native=${nativeSessions.length} merged=${sessions.length} elapsedMs=${Date.now() - startedAt}`,
+      );
+      return { ok: true, sessions };
+    }
+
     case "session.get": {
       const id = req.id as string | undefined;
       if (!id) return { ok: false, error: "Missing required: id" };
       const session = sm.getSession(id);
       if (!session) return { ok: false, error: `Session ${id} not found` };
       return { ok: true, session };
+    }
+
+    case "session.suggest": {
+      // Deprecated: AI-generated suggestions were removed to stop spurious CLI
+      // spawns. Quick prompts now live in the user's configured prompt library
+      // (prompt.list). Return empty for backwards-compat.
+      return { ok: true, suggestions: [], suggestionSource: "heuristic", suggestionsCached: false };
     }
 
     case "session.history": {
@@ -241,8 +292,17 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
         return { ok: false, error: "Invalid tool. Expected claude or codex." };
       }
 
-      const history = await readHistoryForNativeSession({ tool, resumeId, cwd, limitLines });
-      return { ok: true, history };
+      try {
+        const history = await readHistoryForNativeSession({ tool, resumeId, cwd, limitLines });
+        return { ok: true, history };
+      } catch (err) {
+        // Surface the error to the client but never throw — a broken or
+        // missing native history file must not drop the bridge connection.
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
     }
 
     case "session.wait_idle": {
@@ -296,7 +356,7 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
     case "bridge.enable": {
       const state = sm.getState();
       const port = typeof req.port === "number" ? req.port : 7842;
-      const tls = req.tls !== false; // default true
+      const tls = req.tls !== false; // default true — auto-uses Tailscale cert if available
       const bindHost = typeof req.bindHost === "string" && req.bindHost.trim()
         ? req.bindHost.trim()
         : undefined;
@@ -358,11 +418,21 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
         expireSeconds,
         extraClaims: { kind: "bootstrap" },
       });
-      return {
+      const localIp = getLocalIp();
+      const port = state.bridge.port;
+      const tsIp = detectTailscaleIp();
+      const tsTls = getTailscaleTls();
+      const result: IpcResponse & Record<string, unknown> = {
         ok: true,
         bridgeToken: token,
-        bridgeUrl: `openvide://${getLocalIp()}:${state.bridge.port}?token=${token}`,
-      } as IpcResponse & { bridgeToken: string; bridgeUrl: string };
+        bridgeUrl: `http://${localIp}:${port}`,
+      };
+      if (tsTls) {
+        result.tailscaleUrl = `https://${tsTls.hostname}:${port}`;
+      } else if (tsIp) {
+        result.tailscaleUrl = `http://${tsIp}:${port}`;
+      }
+      return result;
     }
 
     case "bridge.token.revoke": {
@@ -417,7 +487,7 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
         state.bridge.bindHost = req.bindHost.trim() || undefined;
         changed = true;
       }
-      if (req.evenAiTool === "claude" || req.evenAiTool === "codex") {
+      if (req.evenAiTool === "claude" || req.evenAiTool === "codex" || req.evenAiTool === "gemini") {
         state.bridge.evenAiTool = req.evenAiTool;
         changed = true;
       }

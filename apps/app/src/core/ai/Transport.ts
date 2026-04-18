@@ -48,6 +48,11 @@ export interface Transport {
     credentials: SshCredentials,
   ): Promise<DaemonSessionInfo[]>;
 
+  listSessionCatalog(
+    target: TargetProfile,
+    credentials: SshCredentials,
+  ): Promise<WorkspaceChatInfo[]>;
+
   listWorkspaceSessions(
     target: TargetProfile,
     credentials: SshCredentials,
@@ -83,6 +88,13 @@ export interface Transport {
     target: TargetProfile,
     credentials: SshCredentials,
   ): Promise<CodexModelInfo[]>;
+
+  sessionSuggest(
+    target: TargetProfile,
+    credentials: SshCredentials,
+    daemonSessionId: string,
+    limit?: number,
+  ): Promise<FollowUpSuggestion[]>;
 
   registerPushToken(
     target: TargetProfile,
@@ -225,8 +237,15 @@ export interface BridgeRuntimeConfig {
   port: number;
   tls: boolean;
   defaultCwd: string;
-  evenAiTool: "claude" | "codex";
+  evenAiTool: "claude" | "codex" | "gemini";
   evenAiMode: "new" | "last" | "pinned";
   evenAiPinnedSessionId: string;
   currentEvenAiSessionId: string;
+}
+
+export interface FollowUpSuggestion {
+  id?: string;
+  label: string;
+  prompt: string;
+  source: "ai" | "heuristic";
 }

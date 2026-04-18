@@ -1,6 +1,6 @@
 import { NativeSshClient, type SshRunResult } from "../ssh/nativeSsh";
 import type { SshCredentials, TargetProfile } from "../types";
-import type { Transport, ScheduledTask, ScheduleDraft, TeamInfo, TeamTaskInfo, TeamMessageInfo, TeamPlanInfo, TeamMemberInput, TeamPlanInput, TeamPlanSubmitOpts, BridgeRuntimeConfig } from "./Transport";
+import type { Transport, ScheduledTask, ScheduleDraft, TeamInfo, TeamTaskInfo, TeamMessageInfo, TeamPlanInfo, TeamMemberInput, TeamPlanInput, TeamPlanSubmitOpts, BridgeRuntimeConfig, FollowUpSuggestion } from "./Transport";
 
 export interface DaemonSessionInfo {
   id: string;
@@ -26,7 +26,7 @@ export interface DaemonSessionInfo {
 export interface WorkspaceChatInfo {
   id: string;
   origin: "daemon" | "native";
-  tool: "claude" | "codex";
+  tool: "claude" | "codex" | "gemini";
   status: string;
   workingDirectory: string;
   resumeId: string;
@@ -605,6 +605,28 @@ export class DaemonTransport implements Transport {
     return sessions as unknown as DaemonSessionInfo[];
   }
 
+  async listSessionCatalog(
+    target: TargetProfile,
+    credentials: SshCredentials,
+  ): Promise<WorkspaceChatInfo[]> {
+    const cmd = "openvide-daemon session catalog";
+    const daemonOutput = await this.execDaemonCommand(
+      target,
+      credentials,
+      cmd,
+      { timeoutMs: DaemonTransport.LONG_CMD_TIMEOUT_MS },
+    );
+    const resp = parseIpcResponse(daemonOutput);
+    if (!resp["ok"]) {
+      throw new Error((resp["error"] as string) ?? "Daemon session catalog failed");
+    }
+    const sessions = resp["sessions"];
+    if (!Array.isArray(sessions)) {
+      return [];
+    }
+    return sessions as unknown as WorkspaceChatInfo[];
+  }
+
   async listWorkspaceSessions(
     target: TargetProfile,
     credentials: SshCredentials,
@@ -707,6 +729,28 @@ export class DaemonTransport implements Transport {
     }
 
     throw new Error("No valid codex model list response");
+  }
+
+  async sessionSuggest(
+    target: TargetProfile,
+    credentials: SshCredentials,
+    daemonSessionId: string,
+    limit = 4,
+  ): Promise<FollowUpSuggestion[]> {
+    const cmd = [
+      "openvide-daemon", "session", "suggest",
+      "--id", escapeShellArg(daemonSessionId),
+      "--limit", String(limit),
+    ].join(" ");
+    const daemonOutput = await this.execDaemonCommand(target, credentials, cmd, {
+      timeoutMs: DaemonTransport.LONG_CMD_TIMEOUT_MS,
+    });
+    const resp = parseIpcResponse(daemonOutput);
+    if (!resp["ok"]) {
+      throw new Error((resp["error"] as string) ?? "Daemon suggest failed");
+    }
+    const suggestions = resp["suggestions"];
+    return Array.isArray(suggestions) ? (suggestions as FollowUpSuggestion[]) : [];
   }
 
   async runSshCommand(

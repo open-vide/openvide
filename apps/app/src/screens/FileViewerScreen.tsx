@@ -139,7 +139,13 @@ export function FileViewerScreen(): JSX.Element {
     if (!target || content === null) return;
     // Find the first supported tool
     const tools = target.detectedTools;
-    const tool = tools?.claude?.installed ? "claude" as const : tools?.codex?.installed ? "codex" as const : null;
+    const tool = tools?.claude?.installed
+      ? "claude" as const
+      : tools?.codex?.installed
+        ? "codex" as const
+        : tools?.gemini?.installed
+          ? "gemini" as const
+          : null;
     if (!tool) {
       Alert.alert("No AI Tool", "No supported AI CLI tool is installed on this host.");
       return;

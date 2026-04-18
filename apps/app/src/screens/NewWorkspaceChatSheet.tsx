@@ -31,6 +31,7 @@ export function NewWorkspaceChatSheet({ route, navigation }: Props): JSX.Element
     const result: ToolName[] = [];
     if (target.detectedTools.claude?.installed) result.push("claude");
     if (target.detectedTools.codex?.installed) result.push("codex");
+    if (target.detectedTools.gemini?.installed) result.push("gemini");
     return result;
   }, [target]);
 
@@ -80,7 +81,7 @@ export function NewWorkspaceChatSheet({ route, navigation }: Props): JSX.Element
         <View className="flex-row items-center gap-2 bg-muted rounded-2xl p-3">
           <Icon name="alert-triangle" size={16} color={warning} />
           <Text className="text-warning text-[13px] flex-1">
-            No Claude/Codex CLI detected on this host.
+            No Claude/Codex/Gemini CLI detected on this host.
           </Text>
         </View>
       ) : (
@@ -94,7 +95,7 @@ export function NewWorkspaceChatSheet({ route, navigation }: Props): JSX.Element
               )}
               onPress={() => setSelectedTool(tool)}
             >
-              <ProviderIcon tool={tool as "claude" | "codex"} size={24} />
+              <ProviderIcon tool={tool} size={24} />
               <Text
                 className={cn(
                   "text-[15px] font-semibold",

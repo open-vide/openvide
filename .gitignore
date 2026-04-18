@@ -31,6 +31,11 @@ node_modules/
 .turbo/
 dist/
 web-build/
+*.ehpk
+
+# G2 webview client
+apps/g2/node_modules/
+apps/g2/dist/
 
 # Metro / React Native temp
 .metro-health-check*

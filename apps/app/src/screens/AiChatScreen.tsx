@@ -17,6 +17,7 @@ import { useVoiceInput } from "../core/useVoiceInput";
 import { getModesForTool, getDefaultMode } from "../core/modeOptions";
 import type { ModelOption } from "../core/modelOptions";
 import type { AiMessage, AiSession } from "../core/types";
+import type { FollowUpSuggestion } from "../core/ai/Transport";
 import type { MainStackParamList } from "../navigation/types";
 
 type Props = NativeStackScreenProps<MainStackParamList, "AiChat">;
@@ -50,6 +51,7 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
     ensureSessionAttached,
     detachFromSession,
     refreshSessionHistory,
+    getSessionFollowUpSuggestions,
     getRemoteUrl,
   } = useAppStore();
 
@@ -61,7 +63,7 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
   const [availableModels, setAvailableModels] = useState<ModelOption[] | undefined>(undefined);
   const [inputText, setInputText] = useState(initialPrompt ?? "");
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const showPromptSuggestions = false;
+  const [followUpSuggestions, setFollowUpSuggestions] = useState<FollowUpSuggestion[]>([]);
   const textBeforeVoiceRef = useRef("");
   const menuAnchorRef = useRef<View>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -116,6 +118,55 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
       detachFromSession(sessionId);
     };
   }, [sessionId, refreshSessionHistory, ensureSessionAttached, detachFromSession]);
+
+  useEffect(() => {
+    if (!session?.conversationId) return;
+    if (session.status === "running") return;
+
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        await refreshSessionHistory(sessionId);
+      } catch {
+        // Keep the current chat visible if background history refresh fails.
+      }
+    };
+
+    void refresh();
+    const timer = setInterval(() => {
+      if (!cancelled) {
+        void refresh();
+      }
+    }, 4000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [refreshSessionHistory, session?.conversationId, session?.status, sessionId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!session || session.status === "running" || !session.daemonSessionId) {
+      setFollowUpSuggestions([]);
+      return;
+    }
+
+    void getSessionFollowUpSuggestions(session.id).then((items) => {
+      if (!cancelled) {
+        setFollowUpSuggestions(items);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setFollowUpSuggestions([]);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getSessionFollowUpSuggestions, session?.daemonSessionId, session?.id, session?.status, session?.updatedAt]);
 
   const refreshAvailableModels = useCallback(async () => {
     if (!activeSessionId) {
@@ -265,6 +316,7 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
     if (!session) {
       return;
     }
+    setFollowUpSuggestions([]);
     try {
       await sendAiPrompt(session.id, text);
     } catch (error) {
@@ -398,11 +450,12 @@ export function AiChatScreen({ route, navigation }: Props): JSX.Element {
         )}
       </View>
 
-      {showPromptSuggestions ? (
+      {!isRunning && followUpSuggestions.length > 0 ? (
         <QuickActions
           sessionStatus={session.status}
           tool={session.tool}
           onAction={handleSend}
+          suggestions={followUpSuggestions}
         />
       ) : null}
 

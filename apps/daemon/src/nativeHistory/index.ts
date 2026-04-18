@@ -1,11 +1,22 @@
-import type { NativeSessionRecord, SessionRecord, WorkspaceSessionRecord } from "../types.js";
+import type { NativeSessionRecord, SessionRecord, Tool, WorkspaceSessionRecord } from "../types.js";
 import { listClaudeNativeSessions } from "./claude.js";
 import { listCodexLegacySessions, listCodexNativeSessions } from "./codex.js";
 import { normalizeWorkspacePath, sortByUpdatedDesc } from "./pathUtils.js";
+import { listDismissedNativeIds } from "../sessionManager.js";
 import type { ListNativeSessionsOptions, MergeWorkspaceSessionsInput, MergeWorkspaceSessionsOutput } from "./types.js";
 
+const NATIVE_CATALOG_CACHE_TTL_MS = 10000;
+
+let nativeCatalogCache:
+  | {
+    tool: "claude" | "codex" | "all";
+    expiresAt: number;
+    sessions: NativeSessionRecord[];
+  }
+  | null = null;
+
 function workspaceDedupKey(input: {
-  tool: "claude" | "codex";
+  tool: Tool;
   origin: "daemon" | "native";
   resumeId: string;
   daemonSessionId?: string;
@@ -23,7 +34,7 @@ function daemonToWorkspaceRecord(session: SessionRecord): WorkspaceSessionRecord
   return {
     id: session.id,
     origin: "daemon",
-    tool: session.tool as "claude" | "codex",
+    tool: session.tool,
     status: session.status,
     runKind: session.runKind,
     scheduleId: session.scheduleId,
@@ -67,6 +78,9 @@ function nativeToWorkspaceRecord(session: NativeSessionRecord): WorkspaceSession
 export async function listNativeSessionsForWorkspace(
   options: ListNativeSessionsOptions,
 ): Promise<NativeSessionRecord[]> {
+  if (!options.cwd) {
+    return [];
+  }
   const tool = options.tool ?? "all";
   const tasks: Array<Promise<NativeSessionRecord[]>> = [];
   if (tool === "all" || tool === "claude") {
@@ -80,13 +94,44 @@ export async function listNativeSessionsForWorkspace(
   return sortByUpdatedDesc(settled.flat());
 }
 
-export function mergeWorkspaceSessions(input: MergeWorkspaceSessionsInput): MergeWorkspaceSessionsOutput {
-  const targetCwd = normalizeWorkspacePath(input.cwd);
+export async function listNativeSessionsCatalog(
+  options: Pick<ListNativeSessionsOptions, "tool"> = {},
+): Promise<NativeSessionRecord[]> {
+  const tool = options.tool ?? "all";
+  const now = Date.now();
+  if (nativeCatalogCache && nativeCatalogCache.tool === tool && nativeCatalogCache.expiresAt > now) {
+    return nativeCatalogCache.sessions;
+  }
+
+  const tasks: Array<Promise<NativeSessionRecord[]>> = [];
+  if (tool === "all" || tool === "claude") {
+    tasks.push(listClaudeNativeSessions());
+  }
+  if (tool === "all" || tool === "codex") {
+    tasks.push(listCodexNativeSessions());
+    tasks.push(listCodexLegacySessions());
+  }
+
+  const sessions = sortByUpdatedDesc((await Promise.all(tasks)).flat());
+  nativeCatalogCache = {
+    tool,
+    expiresAt: now + NATIVE_CATALOG_CACHE_TTL_MS,
+    sessions,
+  };
+  return sessions;
+}
+
+function mergeSessionCollections(input: {
+  daemonSessions: SessionRecord[];
+  nativeSessions: NativeSessionRecord[];
+  cwd?: string;
+}): WorkspaceSessionRecord[] {
+  const targetCwd = input.cwd ? normalizeWorkspacePath(input.cwd) : null;
+  const dismissed = new Set(listDismissedNativeIds());
   const out = new Map<string, WorkspaceSessionRecord>();
 
   for (const daemonSession of input.daemonSessions) {
-    if (daemonSession.tool !== "claude" && daemonSession.tool !== "codex") continue;
-    if (normalizeWorkspacePath(daemonSession.workingDirectory) !== targetCwd) continue;
+    if (targetCwd && normalizeWorkspacePath(daemonSession.workingDirectory) !== targetCwd) continue;
 
     const record = daemonToWorkspaceRecord(daemonSession);
     const key = workspaceDedupKey({
@@ -99,8 +144,8 @@ export function mergeWorkspaceSessions(input: MergeWorkspaceSessionsInput): Merg
   }
 
   for (const nativeSession of input.nativeSessions) {
-    if (nativeSession.tool !== "claude" && nativeSession.tool !== "codex") continue;
-    if (normalizeWorkspacePath(nativeSession.workingDirectory) !== targetCwd) continue;
+    if (targetCwd && normalizeWorkspacePath(nativeSession.workingDirectory) !== targetCwd) continue;
+    if (dismissed.has(nativeSession.id)) continue;
 
     const nativeRecord = nativeToWorkspaceRecord(nativeSession);
     const key = workspaceDedupKey({
@@ -115,8 +160,6 @@ export function mergeWorkspaceSessions(input: MergeWorkspaceSessionsInput): Merg
       continue;
     }
 
-    // Prefer native title (firstPrompt — matches `claude -r` / `codex` display)
-    // over daemon title (which is lastTurn.prompt — the most recent turn, not the session name).
     if (nativeRecord.title) {
       existing.title = nativeRecord.title;
     }
@@ -129,12 +172,21 @@ export function mergeWorkspaceSessions(input: MergeWorkspaceSessionsInput): Merg
     if (!existing.createdAt && nativeRecord.createdAt) {
       existing.createdAt = nativeRecord.createdAt;
     }
-    // Use the most recent updatedAt between daemon and native so that sessions
-    // active outside the app (e.g. direct CLI usage) sort to the top.
     if (nativeRecord.updatedAt && (!existing.updatedAt || nativeRecord.updatedAt > existing.updatedAt)) {
       existing.updatedAt = nativeRecord.updatedAt;
     }
   }
 
   return sortByUpdatedDesc([...out.values()]);
+}
+
+export function mergeWorkspaceSessions(input: MergeWorkspaceSessionsInput): MergeWorkspaceSessionsOutput {
+  return mergeSessionCollections(input);
+}
+
+export function mergeDiscoveredSessions(input: {
+  daemonSessions: SessionRecord[];
+  nativeSessions: NativeSessionRecord[];
+}): WorkspaceSessionRecord[] {
+  return mergeSessionCollections(input);
 }

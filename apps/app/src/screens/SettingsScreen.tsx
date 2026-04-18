@@ -262,7 +262,7 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
                 <View className="gap-2">
                   <Text className="text-dimmed text-xs">Default Tool</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                    {(["claude", "codex"] as const).map((tool) => {
+                    {(["claude", "codex", "gemini"] as const).map((tool) => {
                       const selected = bridgeConfig.evenAiTool === tool;
                       return (
                         <Pressable
@@ -316,7 +316,7 @@ export function SettingsScreen({ navigation }: Props): JSX.Element {
                             style={{ backgroundColor: selected ? accent : muted }}
                             onPress={() => void handleBridgeUpdate({ evenAiPinnedSessionId: daemonSessionId })}
                           >
-                            {(session.tool === "claude" || session.tool === "codex") ? <ProviderIcon tool={session.tool} size={14} /> : null}
+                            {(session.tool === "claude" || session.tool === "codex" || session.tool === "gemini") ? <ProviderIcon tool={session.tool} size={14} /> : null}
                             <Text numberOfLines={1} style={{ color: selected ? primaryForeground : foreground }}>
                               {(session.workingDirectory?.split("/").filter(Boolean).pop() ?? session.tool)} · {daemonSessionId.slice(0, 8)}
                             </Text>

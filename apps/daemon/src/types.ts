@@ -1,6 +1,7 @@
 // ── Session & State ──
 
 export type Tool = "claude" | "codex" | "gemini";
+export type SessionExecutionBackend = "cli" | "codex_app_server";
 
 export type SessionStatus =
   | "idle"
@@ -17,10 +18,27 @@ export interface LastTurn {
   error?: string;
 }
 
+export interface PromptRecord {
+  id: string;
+  label: string;
+  prompt: string;
+  isBuiltIn: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface FollowUpSuggestion {
+  id: string;
+  label: string;
+  prompt: string;
+  source: "ai" | "heuristic";
+}
+
 export interface SessionRecord {
   id: string;
   tool: Tool;
   status: SessionStatus;
+  executionBackend?: SessionExecutionBackend;
   runKind?: "interactive" | "scheduled" | "team";
   scheduleId?: string;
   scheduleName?: string;
@@ -64,7 +82,7 @@ export interface NativeSessionRecord {
 export interface WorkspaceSessionRecord {
   id: string;
   origin: "daemon" | "native";
-  tool: "claude" | "codex";
+  tool: Tool;
   status: SessionStatus;
   runKind?: "interactive" | "scheduled" | "team";
   scheduleId?: string;
@@ -96,7 +114,7 @@ export interface BridgeConfig {
   revokedTokens: string[];        // revoked JTI strings
   clientSessions?: Record<string, BridgeClientSession>;
   defaultCwd?: string;            // working dir for Even AI sessions (default: $HOME)
-  evenAiTool?: "claude" | "codex";  // tool for Even AI (default: "claude")
+  evenAiTool?: "claude" | "codex" | "gemini";  // tool for Even AI (default: "claude")
   evenAiMode?: "new" | "last" | "pinned";  // session routing mode (default: "last")
   evenAiPinnedSessionId?: string;  // session ID for pinned mode
   currentEvenAiSessionId?: string; // last-used session ID (for "last" mode)
@@ -108,7 +126,7 @@ export interface BridgeConfigSnapshot {
   tls: boolean;
   bindHost: string;
   defaultCwd: string;
-  evenAiTool: "claude" | "codex";
+  evenAiTool: "claude" | "codex" | "gemini";
   evenAiMode: "new" | "last" | "pinned";
   evenAiPinnedSessionId: string;
   currentEvenAiSessionId: string;
@@ -128,10 +146,13 @@ export interface BridgeClientSession {
 export interface DaemonState {
   version: 1;
   sessions: Record<string, SessionRecord>;
+  prompts?: PromptRecord[];
   pushToken?: string;
   bridge?: BridgeConfig;
   teams?: Record<string, TeamConfig>;
   schedules?: Record<string, ScheduledTask>;
+  /** IDs of native sessions (e.g. "codex:abc123", "claude:xyz") that the user has dismissed from the list. */
+  dismissedNativeIds?: string[];
 }
 
 // ── Output JSONL ──
@@ -217,6 +238,11 @@ export interface IpcResponse {
   remoteUrl?: string;
   schedules?: ScheduledTask[];
   schedule?: ScheduledTask;
+  prompt?: PromptRecord;
+  prompts?: PromptRecord[];
+  suggestions?: FollowUpSuggestion[];
+  suggestionSource?: "ai" | "heuristic";
+  suggestionsCached?: boolean;
   team?: TeamConfig;
   teams?: TeamConfig[];
   teamTasks?: TeamTask[];
