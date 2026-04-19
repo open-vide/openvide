@@ -9,6 +9,7 @@ process.env.HOME = testHome;
 const testDaemonDir = path.join(testHome, ".openvide-daemon");
 
 const sm = await import("../dist/sessionManager.js");
+const nativeHistory = await import("../dist/nativeHistory/index.js");
 
 afterEach(async () => {
   sm.setCodexAppServerTurnSpawnerForTest();
@@ -121,6 +122,13 @@ test("codex ask permission requests pause the session and approve_once resumes i
   assert.equal(awaiting.pendingPermission.status, "pending");
   assert.equal(awaiting.pendingPermission.command, "echo test");
   assert.equal(awaiting.pendingPermission.options.length, 3);
+
+  const catalogSessions = nativeHistory.mergeDiscoveredSessions({
+    daemonSessions: [awaiting],
+    nativeSessions: [],
+  });
+  assert.equal(catalogSessions[0].pendingPermission.requestId, "approval-1");
+  assert.equal(catalogSessions[0].pendingPermission.status, "pending");
 
   const approved = await sm.respondToPermission(session.id, "approval-1", "approve_once");
 

@@ -130,6 +130,7 @@ export interface WorkspaceSessionRecord {
   title?: string;
   summary?: string;
   messageCount?: number;
+  pendingPermission?: PendingPermissionRequest;
   lastTurn?: LastTurn;
 }
 
