@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as child_process from "node:child_process";
 import * as os from "node:os";
+import { DAEMON_CAPABILITIES, DAEMON_VERSION } from "./buildInfo.js";
 import { daemonDir, log, logError } from "./utils.js";
 import * as sm from "./sessionManager.js";
 import type { IpcRequest, IpcResponse, Tool, BridgeConfig, BridgeConfigSnapshot } from "./types.js";
@@ -142,8 +143,12 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
       const tools = await detectInstalledTools();
       return {
         ok: true,
+        version: DAEMON_VERSION,
         pid: process.pid,
         name: os.hostname(),
+        daemonPath: process.argv[1] ? path.resolve(process.argv[1]) : "",
+        nodeVersion: process.version,
+        capabilities: DAEMON_CAPABILITIES,
         activeSessions: sm.getActiveCount(),
         totalSessions: sessions.length,
         tools,

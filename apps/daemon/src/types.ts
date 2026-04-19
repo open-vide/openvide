@@ -252,6 +252,10 @@ export interface IpcResponse {
   timedOut?: boolean;
   pid?: number;
   name?: string;
+  version?: string;
+  daemonPath?: string;
+  nodeVersion?: string;
+  capabilities?: Record<string, boolean>;
   activeSessions?: number;
   totalSessions?: number;
   tools?: Record<string, boolean>;
