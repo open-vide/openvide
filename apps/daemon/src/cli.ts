@@ -8,9 +8,8 @@ import { encodeQR } from "./qrText.js";
 import { tryCacheClaudeAuth } from "./authCache.js";
 import { generateDeployScaffold, type DeployProxy } from "./deployScaffold.js";
 import { runDeployDoctor, runDeploySetup } from "./deployManager.js";
+import { DAEMON_VERSION } from "./buildInfo.js";
 import type { IpcRequest, IpcResponse, Tool } from "./types.js";
-
-const DAEMON_VERSION = "0.2.3";
 
 function detectTailscaleIp(): string | null {
   const interfaces = os.networkInterfaces();
