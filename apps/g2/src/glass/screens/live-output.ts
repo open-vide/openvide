@@ -29,12 +29,14 @@ import {
 import { t as translate } from '../../utils/i18n';
 import type { AppLanguage } from '../../utils/i18n';
 
+const CHAT_MODE_STRIDE = 100_000;
+
 const chatMode = createModeEncoder({
   buttons: 0,
-  read: 100,        // read collapsed: offset = block index
-  readOpen: 200,    // read expanded: offset = block index (current block is open)
-  modeSelect: 300,
-  modelSelect: 400,
+  read: CHAT_MODE_STRIDE,             // read collapsed: offset = output line index
+  readOpen: CHAT_MODE_STRIDE * 2,     // read expanded: offset = output line index
+  modeSelect: CHAT_MODE_STRIDE * 3,
+  modelSelect: CHAT_MODE_STRIDE * 4,
 });
 
 const MODE_OPTIONS = [
