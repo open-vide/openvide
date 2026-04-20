@@ -306,6 +306,7 @@ async function dispatchSchedule(record: ScheduledTask): Promise<SessionRecord | 
     record.target.model,
     true,
     undefined,
+    undefined,
     { runKind: "scheduled", scheduleId: record.id, scheduleName: record.name },
   );
   const sendRes = sm.sendTurn(session.id, record.target.prompt, {

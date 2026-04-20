@@ -7,16 +7,24 @@ import { purgeExpiredBridgeClientSessions } from "./bridgeAuth.js";
 import { newId, nowISO, log, logError } from "./utils.js";
 import type {
   DaemonState,
+  PendingPermissionRequest,
+  PermissionDecision,
+  PermissionMode,
   PromptRecord,
   SessionExecutionBackend,
   SessionRecord,
-  SessionStatus,
   Tool,
   IpcResponse,
 } from "./types.js";
 
 const runningProcesses = new Map<string, RunningProcess>();
+const pendingPermissionResponders = new Map<string, (decision: PermissionDecision) => Promise<void>>();
 let state: DaemonState = { version: 1, sessions: {} };
+let spawnCodexAppServerTurnImpl: typeof spawnCodexAppServerTurn = spawnCodexAppServerTurn;
+
+export function setCodexAppServerTurnSpawnerForTest(spawner?: typeof spawnCodexAppServerTurn): void {
+  spawnCodexAppServerTurnImpl = spawner ?? spawnCodexAppServerTurn;
+}
 
 const BUILT_IN_PROMPTS: PromptRecord[] = [
   {
@@ -129,11 +137,40 @@ function extractLastProviderError(sessionId: string): string | undefined {
   return undefined;
 }
 
-function defaultExecutionBackend(tool: Tool, conversationId?: string, outputLines = 0): SessionExecutionBackend {
+function defaultExecutionBackend(
+  tool: Tool,
+  conversationId?: string,
+  outputLines = 0,
+  permissionMode: PermissionMode = "auto",
+): SessionExecutionBackend {
+  if (tool === "codex" && permissionMode === "ask") {
+    return "codex_app_server";
+  }
   if (tool === "codex" && conversationId && outputLines === 0) {
     return "codex_app_server";
   }
   return "cli";
+}
+
+function parsePermissionMode(value: unknown, tool?: Tool): PermissionMode {
+  if (value === "ask" || value === "auto") return value;
+  if (tool === "codex" && process.env.OPENVIDE_CODEX_PERMISSION_MODE === "ask") {
+    return "ask";
+  }
+  return "auto";
+}
+
+function permissionKey(sessionId: string, requestId: string): string {
+  return `${sessionId}:${requestId}`;
+}
+
+function clearPermissionRespondersForSession(sessionId: string): void {
+  const prefix = `${sessionId}:`;
+  for (const key of [...pendingPermissionResponders.keys()]) {
+    if (key.startsWith(prefix)) {
+      pendingPermissionResponders.delete(key);
+    }
+  }
 }
 
 // ── State access ──
@@ -171,17 +208,32 @@ export function init(): void {
       delete state.sessions[id];
       continue;
     }
-    if (session.status === "running") {
+    if (!session.permissionMode) {
+      session.permissionMode = parsePermissionMode(undefined, session.tool);
+      needsPersist = true;
+    }
+    if (session.status === "running" || session.status === "awaiting_approval") {
       session.status = "interrupted";
       session.pid = undefined;
       session.updatedAt = nowISO();
+      if (session.pendingPermission?.status === "pending") {
+        session.pendingPermission = {
+          ...session.pendingPermission,
+          status: "cancelled",
+        };
+      }
       if (session.lastTurn && !session.lastTurn.endedAt) {
         session.lastTurn.endedAt = nowISO();
         session.lastTurn.error = "daemon restarted";
       }
     }
     if (!session.executionBackend) {
-      session.executionBackend = defaultExecutionBackend(session.tool, session.conversationId, session.outputLines);
+      session.executionBackend = defaultExecutionBackend(
+        session.tool,
+        session.conversationId,
+        session.outputLines,
+        session.permissionMode,
+      );
       needsPersist = true;
     }
   }
@@ -257,16 +309,19 @@ export function createSession(
   model?: string,
   autoAccept?: boolean,
   conversationId?: string,
+  permissionModeInput?: PermissionMode,
   metadata?: SessionCreationMeta,
 ): SessionRecord {
   const id = newId("ses");
   const now = nowISO();
+  const permissionMode = parsePermissionMode(permissionModeInput, tool);
 
   const session: SessionRecord = {
     id,
     tool,
     status: "idle",
-    executionBackend: defaultExecutionBackend(tool, conversationId),
+    executionBackend: defaultExecutionBackend(tool, conversationId, 0, permissionMode),
+    permissionMode,
     runKind: metadata?.runKind ?? "interactive",
     scheduleId: metadata?.scheduleId,
     scheduleName: metadata?.scheduleName,
@@ -334,7 +389,7 @@ export function removeSession(id: string): boolean {
   if (!session) return false;
 
   // Kill process if running
-  if (session.status === "running") {
+  if (session.status === "running" || session.status === "awaiting_approval") {
     session.pendingRemoval = true;
     session.updatedAt = nowISO();
     persist();
@@ -352,6 +407,7 @@ export function removeSession(id: string): boolean {
 
   removeSessionDir(id);
   delete state.sessions[id];
+  clearPermissionRespondersForSession(id);
   persist();
 
   log(`Removed session ${id}`);
@@ -381,6 +437,8 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
 
   session.status = "running";
   session.updatedAt = nowISO();
+  session.pendingPermission = undefined;
+  clearPermissionRespondersForSession(id);
   session.lastTurn = {
     prompt,
     startedAt: nowISO(),
@@ -411,6 +469,19 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
       session.pid = undefined;
 
       if (result.fallbackToCli && session.tool === "codex" && backend === "codex_app_server") {
+        if (session.permissionMode === "ask") {
+          session.status = "failed";
+          session.pid = undefined;
+          if (session.lastTurn) {
+            session.lastTurn.endedAt = nowISO();
+            session.lastTurn.exitCode = result.exitCode ?? 1;
+            session.lastTurn.error = "Codex Ask mode requires app-server approval support; refusing CLI auto fallback.";
+          }
+          session.updatedAt = nowISO();
+          clearPermissionRespondersForSession(id);
+          persist();
+          return;
+        }
         session.executionBackend = "cli";
         session.updatedAt = nowISO();
         const fallbackProc = startRunner("cli");
@@ -423,6 +494,7 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
       if (session.pendingRemoval) {
         removeSessionDir(id);
         delete state.sessions[id];
+        clearPermissionRespondersForSession(id);
         persist();
         log(`Removed session ${id} after process exit`);
         return;
@@ -457,6 +529,13 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
           session.lastTurn.error = extractLastProviderError(id) ?? `Process exited with code ${result.exitCode}`;
         }
       }
+      if (session.pendingPermission?.status === "pending") {
+        session.pendingPermission = {
+          ...session.pendingPermission,
+          status: session.status === "cancelled" ? "cancelled" : "expired",
+        };
+      }
+      clearPermissionRespondersForSession(id);
 
       session.updatedAt = nowISO();
       persist();
@@ -483,11 +562,32 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
     };
 
     if (backend === "codex_app_server") {
-      return spawnCodexAppServerTurn(
+      return spawnCodexAppServerTurnImpl(
         session,
         prompt,
-        { mode: turnOpts?.mode, model: effectiveModel },
+        { mode: turnOpts?.mode, model: effectiveModel, permissionMode: session.permissionMode ?? "auto" },
         handleOutputDelta,
+        (request, responder) => {
+          session.pendingPermission = request;
+          session.status = "awaiting_approval";
+          session.updatedAt = nowISO();
+          pendingPermissionResponders.set(permissionKey(id, request.requestId), responder);
+          persist();
+        },
+        (requestId, status) => {
+          if (session.pendingPermission?.requestId === requestId) {
+            session.pendingPermission = {
+              ...session.pendingPermission,
+              status,
+            };
+          }
+          if (session.status === "awaiting_approval") {
+            session.status = status === "cancelled" ? "cancelled" : "running";
+          }
+          session.updatedAt = nowISO();
+          pendingPermissionResponders.delete(permissionKey(id, requestId));
+          persist();
+        },
         onFinished,
       );
     }
@@ -518,7 +618,7 @@ export function cancelSession(id: string): IpcResponse {
 
   const proc = runningProcesses.get(id);
   if (!proc) {
-    if (session.status === "running") {
+    if (session.status === "running" || session.status === "awaiting_approval") {
       // Process gone but status stuck — fix it
       session.status = "cancelled";
       session.pid = undefined;
@@ -541,6 +641,52 @@ export function cancelSession(id: string): IpcResponse {
   }, 3000);
 
   return { ok: true, session: { ...session } };
+}
+
+export async function respondToPermission(
+  id: string,
+  requestId: string,
+  decision: PermissionDecision,
+): Promise<IpcResponse> {
+  const session = state.sessions[id];
+  if (!session) {
+    return { ok: false, error: `Session ${id} not found` };
+  }
+
+  const pending = session.pendingPermission;
+  if (!pending || pending.requestId !== requestId) {
+    return { ok: false, error: `Permission request ${requestId} not found for session ${id}` };
+  }
+
+  if (pending.status !== "pending") {
+    return { ok: true, session: { ...session } };
+  }
+
+  const responder = pendingPermissionResponders.get(permissionKey(id, requestId));
+  if (!responder) {
+    return { ok: false, error: `Permission request ${requestId} is not attached to a running Codex process` };
+  }
+
+  try {
+    await responder(decision);
+    session.pendingPermission = {
+      ...pending,
+      status: decision === "approve_once"
+        ? "approved"
+        : decision === "reject"
+          ? "rejected"
+          : "cancelled",
+    };
+    if (session.status === "awaiting_approval") {
+      session.status = decision === "abort_run" ? "cancelled" : "running";
+    }
+    session.updatedAt = nowISO();
+    pendingPermissionResponders.delete(permissionKey(id, requestId));
+    persist();
+    return { ok: true, session: { ...session } };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 // ── Shutdown ──
@@ -593,7 +739,7 @@ export async function waitForIdle(id: string, timeoutMs = 30000): Promise<IpcRes
     if (!session) {
       return { ok: false, error: `Session ${id} not found` };
     }
-    if (session.status !== "running") {
+    if (session.status !== "running" && session.status !== "awaiting_approval") {
       return { ok: true, session: { ...session } };
     }
     await new Promise<void>((resolve) => setTimeout(resolve, pollMs));

@@ -5,7 +5,7 @@ import * as child_process from "node:child_process";
 import * as os from "node:os";
 import { daemonDir, log, logError } from "./utils.js";
 import * as sm from "./sessionManager.js";
-import type { IpcRequest, IpcResponse, Tool, BridgeConfig, BridgeConfigSnapshot } from "./types.js";
+import type { IpcRequest, IpcResponse, PermissionDecision, PermissionMode, Tool, BridgeConfig, BridgeConfigSnapshot } from "./types.js";
 import { listNativeSessionsCatalog, listNativeSessionsForWorkspace, mergeDiscoveredSessions, mergeWorkspaceSessions } from "./nativeHistory/index.js";
 import { readHistoryForDaemonSession, readHistoryForNativeSession } from "./historyStore.js";
 import { listCodexModels } from "./codexModels.js";
@@ -182,12 +182,17 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
       if (!tool || !cwd) {
         return { ok: false, error: "Missing required: tool, cwd" };
       }
+      const permissionMode = req.permissionMode as PermissionMode | undefined;
+      if (permissionMode && permissionMode !== "auto" && permissionMode !== "ask") {
+        return { ok: false, error: "Invalid permissionMode. Expected auto or ask." };
+      }
       const session = sm.createSession(
         tool,
         cwd,
         req.model as string | undefined,
         req.autoAccept as boolean | undefined,
         req.conversationId as string | undefined,
+        permissionMode,
       );
       return { ok: true, session };
     }
@@ -208,6 +213,19 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
       const id = req.id as string | undefined;
       if (!id) return { ok: false, error: "Missing required: id" };
       return sm.cancelSession(id);
+    }
+
+    case "session.permission.respond": {
+      const id = (req.id ?? req.sessionId) as string | undefined;
+      const requestId = req.requestId as string | undefined;
+      const decision = req.decision as PermissionDecision | undefined;
+      if (!id || !requestId || !decision) {
+        return { ok: false, error: "Missing required: id, requestId, decision" };
+      }
+      if (decision !== "approve_once" && decision !== "reject" && decision !== "abort_run") {
+        return { ok: false, error: "Invalid decision. Expected approve_once, reject, or abort_run." };
+      }
+      return await sm.respondToPermission(id, requestId, decision);
     }
 
     case "session.list": {

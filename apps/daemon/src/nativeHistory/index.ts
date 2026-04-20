@@ -52,6 +52,7 @@ function daemonToWorkspaceRecord(session: SessionRecord): WorkspaceSessionRecord
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     title: session.lastTurn?.prompt?.trim() || undefined,
+    pendingPermission: session.pendingPermission,
     lastTurn: session.lastTurn,
   };
 }

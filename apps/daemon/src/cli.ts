@@ -35,10 +35,11 @@ Usage:
   openvide-daemon version
   openvide-daemon run
   openvide-daemon health
-  openvide-daemon session create --tool <claude|codex|gemini> --cwd <path> [--model <model>] [--auto-accept] [--conversation-id <id>]
+  openvide-daemon session create --tool <claude|codex|gemini> --cwd <path> [--model <model>] [--auto-accept] [--conversation-id <id>] [--permission-mode <auto|ask>]
   openvide-daemon session send --id <id> --prompt <prompt>
   openvide-daemon session stream --id <id> [--offset <n>] [--follow]
   openvide-daemon session cancel --id <id>
+  openvide-daemon session permission --id <id> --request-id <id> --decision <approve_once|reject|abort_run>
   openvide-daemon session list
   openvide-daemon session catalog
   openvide-daemon session list-native --cwd <path> [--tool <claude|codex|all>]
@@ -528,6 +529,7 @@ async function main(): Promise<void> {
           model: flags.get("model"),
           autoAccept: flags.has("auto-accept") ? true : undefined,
           conversationId: flags.get("conversation-id"),
+          permissionMode: flags.get("permission-mode"),
         });
         printJson(res);
         return;
@@ -586,7 +588,7 @@ async function main(): Promise<void> {
             const state = loadState();
             const session = state.sessions[id];
             if (!session) return true;
-            return session.status !== "running";
+            return session.status !== "running" && session.status !== "awaiting_approval";
           },
           ac.signal,
         );
@@ -600,6 +602,27 @@ async function main(): Promise<void> {
         }
         ensureDaemon();
         const res = await sendCommand({ cmd: "session.cancel", id });
+        printJson(res);
+        return;
+      }
+
+      case "permission": {
+        const id = flags.get("id");
+        const requestId = flags.get("request-id");
+        const decision = flags.get("decision");
+        if (!id || !requestId || !decision) {
+          failJson("--id, --request-id, and --decision are required");
+        }
+        if (decision !== "approve_once" && decision !== "reject" && decision !== "abort_run") {
+          failJson("--decision must be approve_once, reject, or abort_run");
+        }
+        ensureDaemon();
+        const res = await sendCommand({
+          cmd: "session.permission.respond",
+          id,
+          requestId,
+          decision,
+        });
         printJson(res);
         return;
       }
