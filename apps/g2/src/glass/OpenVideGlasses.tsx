@@ -20,7 +20,7 @@ import type { Store } from '../state/store';
 import type { Action } from '../state/actions';
 import { applySettingsPatch } from '../lib/settings';
 import { rpcForHost } from '../lib/bridge-hosts';
-import type { WebHost } from '../types';
+import type { PermissionDecision, PermissionRequestStatus, WebHost, WebSession } from '../types';
 import {
   SETTINGS_CACHE_KEY,
   SETTINGS_PENDING_KEY,
@@ -30,6 +30,26 @@ import {
 
 const VOICE_ROUTE = '/voice-input';
 const NATIVE_SYNC_POLL_MS = 4000;
+
+function isPermissionDecision(value: unknown): value is PermissionDecision {
+  return value === 'approve_once' || value === 'reject' || value === 'abort_run';
+}
+
+function statusForPermissionDecision(decision: PermissionDecision): PermissionRequestStatus {
+  if (decision === 'approve_once') return 'approved';
+  if (decision === 'reject') return 'rejected';
+  return 'cancelled';
+}
+
+interface PermissionStatusOverride {
+  status: PermissionRequestStatus;
+  sessionStatus: string;
+  updatedAt: string;
+}
+
+function permissionStatusOverrideKey(sessionId: string, requestId: string): string {
+  return `${sessionId}:${requestId}`;
+}
 
 const deriveScreen = createScreenMapper([
   { pattern: '/', screen: 'home' },
@@ -69,6 +89,7 @@ function useGlassOutputStream(
   ensureBridge: (sessionId: string, sessions: Array<{ id: string; hostId?: string }>) => void,
   hosts: WebHost[],
   activeHostId: string | null,
+  connectionStatus: 'connected' | 'connecting' | 'disconnected',
 ): string[] {
   const [outputLines, setOutputLines] = useState<string[]>([]);
   const streamLinesRef = useRef<string[]>([]);
@@ -77,7 +98,19 @@ function useGlassOutputStream(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedNativeHistoryKeyRef = useRef<string | null>(null);
   const nativeHistoryLineCountRef = useRef(0);
+  const subscribedTargetRef = useRef<string | null>(null);
   const session = sessions?.find((entry) => entry.id === sessionId) ?? null;
+  const sessionsLoaded = sessions != null;
+  const bridgeSubscriptionKey = useMemo(
+    () => hosts.map((host) => [
+      host.id,
+      host.url,
+      host.accessToken ? 'access' : '',
+      host.refreshToken ? 'refresh' : '',
+      host.token ? 'token' : '',
+    ].join(':')).join('|'),
+    [hosts],
+  );
 
   // Ensure bridge points at the right host before subscribing
   useEffect(() => {
@@ -86,21 +119,26 @@ function useGlassOutputStream(
 
   useEffect(() => {
     if (!sessionId) {
+      subscribedTargetRef.current = null;
       setOutputLines([]);
       streamLinesRef.current = [];
       nativeLinesRef.current = [];
       seenRef.current = new Set();
+      loadedNativeHistoryKeyRef.current = null;
       nativeHistoryLineCountRef.current = 0;
       return;
     }
+    if (sessionsLoaded && !session) return;
 
-    // Reset on session change
-    streamLinesRef.current = [];
-    nativeLinesRef.current = [];
-    seenRef.current = new Set();
-    loadedNativeHistoryKeyRef.current = null;
-    nativeHistoryLineCountRef.current = 0;
-    setOutputLines([]);
+    if (subscribedTargetRef.current !== sessionId) {
+      subscribedTargetRef.current = sessionId;
+      streamLinesRef.current = [];
+      nativeLinesRef.current = [];
+      seenRef.current = new Set();
+      loadedNativeHistoryKeyRef.current = null;
+      nativeHistoryLineCountRef.current = 0;
+      setOutputLines([]);
+    }
 
     const unsub = subscribe(sessionId, (rawLine: string) => {
       if (seenRef.current.has(rawLine)) return;
@@ -121,12 +159,12 @@ function useGlassOutputStream(
       unsub();
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [sessionId]);
+  }, [activeHostId, bridgeSubscriptionKey, connectionStatus, session?.hostId, session?.id, sessionId, sessionsLoaded]);
 
   useEffect(() => {
     if (!sessionId || !session?.resumeId) return;
     if (session.tool !== 'claude' && session.tool !== 'codex') return;
-    if (session.origin !== 'native' && (session.outputLines ?? 0) > 0) return;
+    if (session.origin !== 'native') return;
 
     const historyKey = [
       session.id,
@@ -174,7 +212,8 @@ function useGlassOutputStream(
   useEffect(() => {
     if (!sessionId || !session?.resumeId) return;
     if (session.tool !== 'claude' && session.tool !== 'codex') return;
-    if (session.status === 'running') return;
+    if (session.origin !== 'native') return;
+    if (session.status === 'running' || session.status === 'awaiting_approval') return;
 
     let cancelled = false;
 
@@ -238,6 +277,14 @@ function useGlassOutputStream(
   return outputLines;
 }
 
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Poll teams list via RPC (no react-query hook exists for teams).
  */
@@ -271,7 +318,8 @@ function useGlassTeams(hosts: Array<{
               refreshTokenExpiresAt: host.refreshTokenExpiresAt,
             });
             if (!cancelled && res.ok && Array.isArray(res.teams)) {
-              setTeams(res.teams);
+              const nextTeams = res.teams as any[];
+              setTeams((current) => (sameJsonValue(current, nextTeams) ? current : nextTeams));
               return;
             }
           } catch { /* try next */ }
@@ -279,7 +327,8 @@ function useGlassTeams(hosts: Array<{
         // Fallback to default rpc
         const res = await rpc('team.list').catch(() => ({ ok: false }));
         if (!cancelled && (res as any).ok && Array.isArray((res as any).teams)) {
-          setTeams((res as any).teams);
+          const nextTeams = (res as any).teams as any[];
+          setTeams((current) => (sameJsonValue(current, nextTeams) ? current : nextTeams));
         }
       } catch { /* keep previous */ }
     }
@@ -319,16 +368,15 @@ function useGlassTeamData(teamId: string | null) {
         ]);
         if (cancelled) return;
         if ((tasksRes as any).ok && Array.isArray((tasksRes as any).teamTasks)) {
-          setTasks((tasksRes as any).teamTasks);
+          const nextTasks = (tasksRes as any).teamTasks as any[];
+          setTasks((current) => (sameJsonValue(current, nextTasks) ? current : nextTasks));
         }
         if ((msgsRes as any).ok && Array.isArray((msgsRes as any).teamMessages)) {
-          setMessages((msgsRes as any).teamMessages);
+          const nextMessages = (msgsRes as any).teamMessages as any[];
+          setMessages((current) => (sameJsonValue(current, nextMessages) ? current : nextMessages));
         }
-        if ((planRes as any).ok && (planRes as any).teamPlan) {
-          setPlan((planRes as any).teamPlan);
-        } else {
-          setPlan(null);
-        }
+        const nextPlan = (planRes as any).ok && (planRes as any).teamPlan ? (planRes as any).teamPlan : null;
+        setPlan((current: any | null) => (sameJsonValue(current, nextPlan) ? current : nextPlan));
       } catch { /* keep previous */ }
     }
 
@@ -352,7 +400,8 @@ function useGlassSchedules() {
       try {
         const res = await rpc('schedule.list').catch(() => ({ ok: false }));
         if (!cancelled && (res as any).ok && Array.isArray((res as any).schedules)) {
-          setSchedules((res as any).schedules);
+          const nextSchedules = (res as any).schedules as any[];
+          setSchedules((current) => (sameJsonValue(current, nextSchedules) ? current : nextSchedules));
         }
       } catch { /* keep previous */ }
     }
@@ -371,7 +420,6 @@ export function OpenVideGlasses() {
 
   // Share data with web UI via react-query hooks
   const { data: sessions } = useSessions();
-  const workspaces = useWorkspaces(sessions);
   const { hosts, activeHostId, hostStatuses, connectionStatus, ensureBridgeForSession, ensureBridgeForCommand, switchHost } = useBridge();
   const { data: settings } = useSettings();
   const { data: prompts } = usePrompts();
@@ -379,6 +427,7 @@ export function OpenVideGlasses() {
   const [sessionModePrefs, setSessionModePrefs] = useState<Record<string, string>>({});
   const [sessionModelPrefs, setSessionModelPrefs] = useState<Record<string, string>>({});
   const [sessionReadNavPrefs, setSessionReadNavPrefs] = useState<Record<string, number>>({});
+  const [permissionStatusOverrides, setPermissionStatusOverrides] = useState<Record<string, PermissionStatusOverride>>({});
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceText, setVoiceText] = useState<string | null>(null);
   const voice = useVoice();
@@ -453,11 +502,59 @@ export function OpenVideGlasses() {
     };
   }, [location.search]);
 
+  const sessionsForGlass = useMemo<WebSession[] | undefined>(() => {
+    if (!sessions) return sessions;
+    return sessions.map((session) => {
+      const permission = session.pendingPermission;
+      if (!permission) return session;
+      const requestId = permission.requestId;
+      const override = permissionStatusOverrides[permissionStatusOverrideKey(session.id, requestId)];
+      if (!override || permission.status !== 'pending') return session;
+
+      return {
+        ...session,
+        status: override.sessionStatus,
+        updatedAt: override.updatedAt,
+        pendingPermission: {
+          ...permission,
+          status: override.status,
+        },
+      };
+    });
+  }, [permissionStatusOverrides, sessions]);
+
+  useEffect(() => {
+    if (!sessions) return;
+    const activePendingKeys = new Set(
+      sessions
+        .map((session) => {
+          const permission = session.pendingPermission;
+          return permission?.status === 'pending'
+            ? permissionStatusOverrideKey(session.id, permission.requestId)
+            : null;
+        })
+        .filter((key): key is string => typeof key === 'string'),
+    );
+
+    setPermissionStatusOverrides((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const key of Object.keys(next)) {
+        if (activePendingKeys.has(key)) continue;
+        delete next[key];
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [sessions]);
+
+  const workspaces = useWorkspaces(sessionsForGlass);
+
   const isFilesScreen = location.pathname.startsWith('/files') || location.pathname === '/file-view';
   const isTeamScreen = location.pathname.startsWith('/team');
   const selectedSession = useMemo(
-    () => (sessions ?? []).find((session) => session.id === (urlParams.sessionId ?? null)) ?? null,
-    [sessions, urlParams.sessionId],
+    () => (sessionsForGlass ?? []).find((session) => session.id === (urlParams.sessionId ?? null)) ?? null,
+    [sessionsForGlass, urlParams.sessionId],
   );
   const selectedSessionMode = useMemo(
     () => (urlParams.sessionId ? sessionModePrefs[urlParams.sessionId] : undefined) ?? 'auto',
@@ -490,7 +587,7 @@ export function OpenVideGlasses() {
   );
 
   // Subscribe to active session's output for glass chat display
-  const outputLines = useGlassOutputStream(urlParams.sessionId ?? null, sessions, ensureBridgeForSession, hosts, activeHostId);
+  const outputLines = useGlassOutputStream(urlParams.sessionId ?? null, sessionsForGlass, ensureBridgeForSession, hosts, activeHostId, connectionStatus);
 
   // Poll teams + team detail data + schedules
   const teams = useGlassTeams(hosts);
@@ -506,7 +603,7 @@ export function OpenVideGlasses() {
 
   // Build snapshot from shared data
   const snapshot: OpenVideSnapshot = useMemo(() => ({
-    sessions: (sessions ?? []) as unknown as OpenVideSnapshot['sessions'],
+    sessions: (sessionsForGlass ?? []) as unknown as OpenVideSnapshot['sessions'],
     hosts: hosts as unknown as OpenVideSnapshot['hosts'],
     selectedHostId: browserHostId ?? activeHostId ?? null,
     hostStatuses,
@@ -538,12 +635,40 @@ export function OpenVideGlasses() {
     suggestedPrompts,
     ports: [],
     pendingResult: null,
-  }), [sessions, hosts, browserHostId, activeHostId, hostStatuses, workspaces, connectionStatus, urlParams, outputLines, voiceListening, voiceText, glassSettings, teams, teamTasks, teamMessages, teamPlan, scheduledTasks, browserEntries, activeTeamId, isViewingFile, fileContent, prompts, suggestedPrompts, selectedSessionMode, selectedSessionModel, selectedSessionReadNavIndex]);
+  }), [sessionsForGlass, hosts, browserHostId, activeHostId, hostStatuses, workspaces, connectionStatus, urlParams, outputLines, voiceListening, voiceText, glassSettings, teams, teamTasks, teamMessages, teamPlan, scheduledTasks, browserEntries, activeTeamId, isViewingFile, fileContent, prompts, suggestedPrompts, selectedSessionMode, selectedSessionModel, selectedSessionReadNavIndex]);
 
   const snapshotRef = useRef(snapshot);
   snapshotRef.current = snapshot;
 
   const getSnapshot = useCallback(() => snapshotRef.current, []);
+
+  const rollbackPermissionStatusOverride = useCallback((sessionId: string, requestId: string) => {
+    const key = permissionStatusOverrideKey(sessionId, requestId);
+    setPermissionStatusOverrides((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    const rollbackSessionList = (current: WebSession[] | undefined) => {
+      if (!current) return current;
+      return current.map((session) => {
+        if (session.id !== sessionId || session.pendingPermission?.requestId !== requestId) {
+          return session;
+        }
+        return {
+          ...session,
+          status: 'awaiting_approval' as const,
+          pendingPermission: {
+            ...session.pendingPermission,
+            status: 'pending' as const,
+          },
+        };
+      });
+    };
+    queryClient.setQueriesData<WebSession[]>({ queryKey: ['sessions'] }, rollbackSessionList);
+    queryClient.setQueriesData<WebSession[]>({ queryKey: ['workspace-sessions'] }, rollbackSessionList);
+  }, [queryClient]);
 
   const rpcWithSharedState = useCallback<OpenVideActions['rpc']>(async (cmd, params) => {
     const nextParams: Record<string, unknown> = { ...(params ?? {}) };
@@ -551,7 +676,7 @@ export function OpenVideGlasses() {
     delete nextParams.hostId;
 
     if (!targetHostId && typeof nextParams.id === 'string' && cmd.startsWith('session.')) {
-      targetHostId = sessions?.find((session) => session.id === nextParams.id)?.hostId ?? null;
+      targetHostId = sessionsForGlass?.find((session) => session.id === nextParams.id)?.hostId ?? null;
     }
 
     if (cmd === 'session.send') {
@@ -565,6 +690,64 @@ export function OpenVideGlasses() {
         if (modelOverride && typeof nextParams.model !== 'string') {
           nextParams.model = modelOverride;
         }
+      }
+    }
+
+    if (cmd === 'session.permission.respond') {
+      const sessionId = typeof nextParams.id === 'string' ? nextParams.id : null;
+      const requestId = typeof nextParams.requestId === 'string' ? nextParams.requestId : null;
+      const decision = nextParams.decision;
+      if (sessionId && requestId && isPermissionDecision(decision)) {
+        const permissionStatus = statusForPermissionDecision(decision);
+        const optimisticSessionStatus = decision === 'abort_run' ? 'cancelled' : 'running';
+        const updatedAt = new Date().toISOString();
+
+        setPermissionStatusOverrides((current) => ({
+          ...current,
+          [permissionStatusOverrideKey(sessionId, requestId)]: {
+            status: permissionStatus,
+            sessionStatus: optimisticSessionStatus,
+            updatedAt,
+          },
+        }));
+
+        queryClient.setQueriesData<WebSession[]>({ queryKey: ['sessions'] }, (current) => {
+          if (!current) return current;
+          return current.map((session) => {
+            if (session.id !== sessionId || session.pendingPermission?.requestId !== requestId) {
+              return session;
+            }
+            return {
+              ...session,
+              status: optimisticSessionStatus,
+              updatedAt,
+              pendingPermission: {
+                ...session.pendingPermission,
+                status: permissionStatus,
+              },
+            };
+          });
+        });
+      }
+
+      try {
+        const res = await rpcForHost(hosts, targetHostId ?? activeHostId, cmd, nextParams);
+        if (!(res as any).ok && sessionId && requestId) {
+          rollbackPermissionStatusOverride(sessionId, requestId);
+        }
+        return res;
+      } catch (err) {
+        if (sessionId && requestId) {
+          rollbackPermissionStatusOverride(sessionId, requestId);
+        }
+        return {
+          ok: false,
+          error: err instanceof Error ? err.message : 'Failed to respond to permission request',
+        };
+      } finally {
+        void queryClient.invalidateQueries({ queryKey: ['sessions'] });
+        void queryClient.invalidateQueries({ queryKey: ['workspace-sessions'] });
+        void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
       }
     }
 
@@ -615,7 +798,7 @@ export function OpenVideGlasses() {
     } catch {
       return { ok: false, error: 'Failed to persist settings immediately; keeping local value and retrying later.' };
     }
-  }, [activeHostId, ensureBridgeForCommand, hosts, queryClient, sessionModePrefs, sessionModelPrefs, sessions]);
+  }, [activeHostId, ensureBridgeForCommand, hosts, queryClient, rollbackPermissionStatusOverride, sessionModePrefs, sessionModelPrefs, sessionsForGlass]);
 
   const startVoice = useCallback(() => {
     const currentPath = `${location.pathname}${location.search}` || '/sessions';

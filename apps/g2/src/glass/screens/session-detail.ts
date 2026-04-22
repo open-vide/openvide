@@ -6,6 +6,7 @@ import { truncate } from 'even-toolkit/text-utils';
 
 import { fieldJoin, drillLabel } from 'even-toolkit/glass-format';
 import type { OpenVideSnapshot, OpenVideActions } from '../types';
+import { t as translate } from '../../utils/i18n';
 
 interface DetailAction {
   id: string;
@@ -24,7 +25,7 @@ function getActions(snap: OpenVideSnapshot): DetailAction[] {
   if (session.status !== 'running') {
     actions.push({ id: 'diffs', label: 'View Diffs', path: `/diffs?id=${session.id}` });
   }
-  if (session.status === 'running') {
+  if (session.status === 'running' || session.status === 'awaiting_approval') {
     actions.push({ id: 'cancel', label: 'Cancel Session' });
   }
   actions.push({ id: 'delete', label: 'Delete Session' });
@@ -45,7 +46,9 @@ export const sessionDetailScreen: GlassScreen<OpenVideSnapshot, OpenVideActions>
     }
 
     const tool = session.tool.toUpperCase();
-    const status = session.status;
+    const status = session.status === 'awaiting_approval'
+      ? translate('session.statusApproval', snap.settings.language)
+      : session.status;
     const lines = [...compactHeader(fieldJoin(tool, status))];
 
     const dirName = session.workingDirectory.split('/').pop() ?? '';

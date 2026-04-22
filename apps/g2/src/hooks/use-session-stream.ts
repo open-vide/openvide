@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { subscribe } from '@/domain/daemon-client';
 import { parseOutputLine } from '@/domain/output-parser';
 import { buildMessagesFromDisplayLines, parseNativeHistoryToDisplayLines } from '@/domain/native-history';
@@ -37,7 +37,7 @@ function sameMessages(current: ChatMessage[], next: ChatMessage[]): boolean {
  */
 export function useSessionStream(sessionId: string | undefined, sessions?: WebSession[]) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const { ensureBridgeForSession, hosts, activeHostId } = useBridge();
+  const { ensureBridgeForSession, hosts, activeHostId, connectionStatus } = useBridge();
   const streamRawLinesRef = useRef<string[]>([]);
   const nativeDisplayLinesRef = useRef<string[]>([]);
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,7 +45,20 @@ export function useSessionStream(sessionId: string | undefined, sessions?: WebSe
   const rebuildMessagesRef = useRef<() => void>(() => {});
   const loadedNativeHistoryKeyRef = useRef<string | null>(null);
   const nativeHistoryLineCountRef = useRef(0);
+  const subscribedTargetRef = useRef<string | null>(null);
+  const seenRawLinesRef = useRef(new Set<string>());
   const session = sessions?.find((entry) => entry.id === sessionId);
+  const sessionsLoaded = sessions != null;
+  const bridgeSubscriptionKey = useMemo(
+    () => hosts.map((host) => [
+      host.id,
+      host.url,
+      host.accessToken ? 'access' : '',
+      host.refreshToken ? 'refresh' : '',
+      host.token ? 'token' : '',
+    ].join(':')).join('|'),
+    [hosts],
+  );
 
   // Ensure bridge is set for this session's host
   useEffect(() => {
@@ -77,27 +90,39 @@ export function useSessionStream(sessionId: string | undefined, sessions?: WebSe
   // history file stream in live — matching the behavior the glasses already
   // have. Non-resumed daemon sessions continue to subscribe to the daemon id.
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      subscribedTargetRef.current = null;
+      seenRawLinesRef.current = new Set();
+      setMessages([]);
+      latestMessagesRef.current = [];
+      streamRawLinesRef.current = [];
+      nativeDisplayLinesRef.current = [];
+      loadedNativeHistoryKeyRef.current = null;
+      nativeHistoryLineCountRef.current = 0;
+      return;
+    }
+    if (sessionsLoaded && !session) return;
 
-    setMessages([]);
-    latestMessagesRef.current = [];
-    streamRawLinesRef.current = [];
-    nativeDisplayLinesRef.current = [];
-    loadedNativeHistoryKeyRef.current = null;
-    nativeHistoryLineCountRef.current = 0;
-
-    const nativeSub = session?.resumeId && (session.tool === 'claude' || session.tool === 'codex' || session.tool === 'gemini')
+    const nativeSub = session?.origin === 'native' && session.resumeId && (session.tool === 'claude' || session.tool === 'codex' || session.tool === 'gemini')
       ? `${session.tool}:${session.resumeId}`
       : null;
     const target = nativeSub ?? sessionId;
 
-    // Deduplicate: track raw lines by content to handle replays
-    const seenLines = new Set<string>();
+    if (subscribedTargetRef.current !== target) {
+      subscribedTargetRef.current = target;
+      setMessages([]);
+      latestMessagesRef.current = [];
+      streamRawLinesRef.current = [];
+      nativeDisplayLinesRef.current = [];
+      loadedNativeHistoryKeyRef.current = null;
+      nativeHistoryLineCountRef.current = 0;
+      seenRawLinesRef.current = new Set();
+    }
 
     const unsub = subscribe(target, (rawLine: string) => {
       // Skip exact duplicate raw lines (replay protection)
-      if (seenLines.has(rawLine)) return;
-      seenLines.add(rawLine);
+      if (seenRawLinesRef.current.has(rawLine)) return;
+      seenRawLinesRef.current.add(rawLine);
 
       streamRawLinesRef.current.push(rawLine);
 
@@ -111,10 +136,11 @@ export function useSessionStream(sessionId: string | undefined, sessions?: WebSe
       if (batchTimerRef.current) clearTimeout(batchTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, session?.resumeId, session?.tool]);
+  }, [activeHostId, bridgeSubscriptionKey, connectionStatus, session?.hostId, session?.id, session?.origin, session?.resumeId, session?.tool, sessionId, sessionsLoaded]);
 
   useEffect(() => {
     if (!sessionId || !session?.resumeId) return;
+    if (session.origin !== 'native') return;
     if (session.tool !== 'claude' && session.tool !== 'codex') return;
     // Always bootstrap native history when a resumeId is present — previously
     // we skipped when the daemon had any output, which meant resumed sessions
@@ -167,8 +193,9 @@ export function useSessionStream(sessionId: string | undefined, sessions?: WebSe
 
   useEffect(() => {
     if (!sessionId || !session?.resumeId) return;
+    if (session.origin !== 'native') return;
     if (session.tool !== 'claude' && session.tool !== 'codex') return;
-    if (session.status === 'running') return;
+    if (session.status === 'running' || session.status === 'awaiting_approval') return;
 
     let cancelled = false;
 

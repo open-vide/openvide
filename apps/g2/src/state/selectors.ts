@@ -5,6 +5,8 @@ import {
   THINK_HEADER, THINK_BODY,
   isThinkingHeader, isThinkingBody,
   parseThinkingHeader,
+  parseAgentMessageDelta,
+  parseAgentMessageFinal,
 } from '../domain/output-parser';
 
 /** Visual style for a display line. */
@@ -107,7 +109,7 @@ function homeData(state: AppState): DisplayData {
   const lang = state.settings.language;
   const total = state.sessions.length;
   const hostCount = state.hosts.length;
-  const running = state.sessions.filter((s) => s.status === 'running').length;
+  const running = state.sessions.filter((s) => s.status === 'running' || s.status === 'awaiting_approval').length;
   const connLabel =
     state.connectionStatus === 'connected' ? ''
     : state.connectionStatus === 'connecting' ? ` ${t('home.connecting', lang)}`
@@ -124,7 +126,7 @@ function homeData(state: AppState): DisplayData {
       const status = state.hostStatuses[host.id] ?? 'disconnected';
       const statusIcon = status === 'connected' ? '\u2713' : '\u2717';
       const hostSessions = state.sessions.filter((s) => s.hostId === host.id);
-      const hostRunning = hostSessions.filter((s) => s.status === 'running').length;
+      const hostRunning = hostSessions.filter((s) => s.status === 'running' || s.status === 'awaiting_approval').length;
       const sesLabel = `${hostSessions.length} ses`;
       const runLabel = hostRunning > 0 ? `  ${hostRunning} run` : '';
       const maxLen = 44 - sesLabel.length - runLabel.length - 4;
@@ -266,6 +268,7 @@ function sessionListData(state: AppState): DisplayData {
     const s = state.sessions[i];
     const statusTag =
       s.status === 'running' ? t('session.statusRun', lang)
+      : s.status === 'awaiting_approval' ? t('session.statusApproval', lang)
       : s.status === 'failed' ? t('session.statusFail', lang)
       : s.status === 'cancelled' ? t('session.statusCanc', lang)
       : s.status === 'interrupted' ? t('session.statusInt', lang)
@@ -292,6 +295,7 @@ function sessionDetailData(state: AppState): DisplayData {
 
   const statusBadge =
     session.status === 'running' ? t('session.running', lang)
+    : session.status === 'awaiting_approval' ? t('session.awaitingApproval', lang)
     : session.status === 'failed' ? t('session.failed', lang)
     : session.status === 'cancelled' ? t('session.cancelled', lang)
     : session.status === 'interrupted' ? t('session.interrupted', lang)
@@ -374,6 +378,7 @@ function liveOutputData(state: AppState): DisplayData {
   const toolName = session ? session.tool.toUpperCase() : '';
   const statusTag = state.voiceListening ? ` ${t('output.listening', lang)}`
     : session?.status === 'running' ? ` ${t('output.live', lang)}`
+    : session?.status === 'awaiting_approval' ? ` ${t('output.approval', lang)}`
     : ` ${t('output.done', lang)}`;
 
   const headerLines: DisplayLine[] = [
@@ -399,8 +404,36 @@ function liveOutputData(state: AppState): DisplayData {
   // Build visible lines, handling thinking collapse/expand
   const wrapped: DisplayLine[] = [];
   let prevStyle: LineStyle | null = null;
+  const finalizedAgentMessageIds = new Set<string>();
+  for (const text of state.outputLines) {
+    const agentFinal = parseAgentMessageFinal(text);
+    if (agentFinal) finalizedAgentMessageIds.add(agentFinal.id);
+  }
 
   for (const text of state.outputLines) {
+    const agentFinal = parseAgentMessageFinal(text);
+    const agentDelta = parseAgentMessageDelta(text);
+    const agentMessage = agentFinal ?? (
+      agentDelta && !finalizedAgentMessageIds.has(agentDelta.id) ? agentDelta : null
+    );
+    if (agentMessage) {
+      const messageText = agentMessage.text.trim();
+      if (!messageText) continue;
+      const style: LineStyle = 'normal';
+      if (prevStyle !== null && style !== prevStyle) {
+        wrapped.push(line('', false, 'normal'));
+      }
+      prevStyle = style;
+      if (messageText.length <= maxChars) {
+        wrapped.push(line(messageText, false, style));
+      } else {
+        for (let i = 0; i < messageText.length; i += maxChars) {
+          wrapped.push(line(messageText.slice(i, i + maxChars), false, style));
+        }
+      }
+      continue;
+    }
+
     // Thinking header: show collapsed or expanded
     if (isThinkingHeader(text)) {
       const parsed = parseThinkingHeader(text);

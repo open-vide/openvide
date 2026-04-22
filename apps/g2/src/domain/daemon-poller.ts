@@ -35,6 +35,7 @@ function mapSessions(raw: unknown[], hostId?: string): SessionSummary[] {
       lastError: s.lastTurn?.error,
       updatedAt: s.updatedAt,
       outputLines: s.outputLines ?? 0,
+      pendingPermission: s.pendingPermission,
     }))
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
@@ -47,14 +48,14 @@ function extractWorkspaces(sessions: SessionSummary[]): Workspace[] {
     const existing = map.get(key);
     if (existing) {
       existing.sessionCount++;
-      if (s.status === 'running') existing.runningCount++;
+      if (s.status === 'running' || s.status === 'awaiting_approval') existing.runningCount++;
     } else {
       map.set(key, {
         path: s.workingDirectory,
         hostId: s.hostId,
         name: s.workingDirectory.split('/').pop() ?? s.workingDirectory,
         sessionCount: 1,
-        runningCount: s.status === 'running' ? 1 : 0,
+        runningCount: s.status === 'running' || s.status === 'awaiting_approval' ? 1 : 0,
       });
     }
   }

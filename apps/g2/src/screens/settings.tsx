@@ -222,6 +222,25 @@ export function SettingsRoute() {
 
         </Card>
 
+        {/* Codex */}
+        <SectionLabel>Codex</SectionLabel>
+        <Card className="mb-4">
+          <SettingRow
+            label={t('settings.codexPermissions')}
+            description="Use Ask for new Codex sessions that should pause for command approval"
+          >
+            <Select
+              value={settings?.codexPermissionMode ?? 'auto'}
+              options={[
+                { value: 'auto', label: t('settings.auto') },
+                { value: 'ask', label: t('settings.ask') },
+              ]}
+              onValueChange={(value) => updateSetting.mutate({ key: 'codexPermissionMode', value: value as 'auto' | 'ask' })}
+              className="w-[130px]"
+            />
+          </SettingRow>
+        </Card>
+
         {/* Even AI bridge */}
         <SectionLabel>Even AI Bridge</SectionLabel>
         <Card className="mb-4">

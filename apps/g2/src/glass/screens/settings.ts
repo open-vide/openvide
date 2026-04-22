@@ -24,6 +24,7 @@ function getSettingsItems(snap: OpenVideSnapshot): SettingsItem[] {
   return [
     { label: t('settings.language', lang), value: getLanguageName(lang), key: 'language', editable: true },
     { label: t('settings.voice', lang), value: VOICE_LANGUAGE_LABELS[s.voiceLang] ?? s.voiceLang, key: 'voiceLang', editable: true },
+    { label: t('settings.codexPermissions', lang), value: s.codexPermissionMode === 'ask' ? t('settings.ask', lang) : t('settings.auto', lang), key: 'codexPermissionMode', editable: true },
     { label: t('settings.toolDetails', lang), value: s.showToolDetails ? t('settings.on', lang) : t('settings.off', lang), key: 'showToolDetails', editable: true },
     { label: t('settings.poll', lang), value: `${s.pollInterval / 1000}s`, key: 'pollInterval', editable: true },
     { label: t('settings.hiddenFiles', lang), value: s.showHiddenFiles ? t('settings.show', lang) : t('settings.hide', lang), key: 'showHiddenFiles', editable: true },
@@ -67,6 +68,9 @@ function cycleSettingValue(settings: any, key: string, direction: 'up' | 'down')
     }
     case 'showToolDetails':
       s.showToolDetails = !s.showToolDetails;
+      break;
+    case 'codexPermissionMode':
+      s.codexPermissionMode = s.codexPermissionMode === 'ask' ? 'auto' : 'ask';
       break;
     case 'pollInterval': {
       const idx = POLL_VALUES.indexOf(s.pollInterval);

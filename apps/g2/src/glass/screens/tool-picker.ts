@@ -56,12 +56,16 @@ export const toolPickerScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
         if (!bridgeRes?.ok) return;
         const bridgeConfig = (bridgeRes.bridgeConfig ?? {}) as { defaultCwd?: string };
         const cwd = snap.selectedWorkspace ?? bridgeConfig.defaultCwd?.trim() ?? '~';
-        const createRes = await ctx.rpc('session.create', {
+        const params: Record<string, unknown> = {
           hostId,
           tool,
           cwd,
           autoAccept: true,
-        });
+        };
+        if (tool === 'codex' && snap.settings.codexPermissionMode === 'ask') {
+          params.permissionMode = 'ask';
+        }
+        const createRes = await ctx.rpc('session.create', params);
         const sessionId = typeof createRes?.session?.id === 'string' ? createRes.session.id : null;
         if (sessionId) {
           ctx.navigate(`/chat?id=${encodeURIComponent(sessionId)}`);

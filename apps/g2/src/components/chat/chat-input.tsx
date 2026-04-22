@@ -8,6 +8,7 @@ interface ChatInputProps {
   onVoiceStop?: () => void;
   isListening?: boolean;
   isRunning?: boolean;
+  disabled?: boolean;
   placeholder?: string;
 }
 
@@ -42,6 +43,7 @@ export function ChatInput({
   onVoiceStop,
   isListening = false,
   isRunning = false,
+  disabled = false,
   placeholder = 'Type a message...',
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -62,6 +64,7 @@ export function ChatInput({
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    if (disabled) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       onSend();
@@ -69,6 +72,7 @@ export function ChatInput({
   };
 
   const handleActionClick = () => {
+    if (disabled) return;
     if (isRunning && !value.trim()) {
       onVoiceStop?.();
       return;
@@ -117,21 +121,23 @@ export function ChatInput({
         ) : (
           <textarea
             ref={textareaRef}
-            className="flex-1 resize-none bg-transparent border-none outline-none text-[15px] tracking-[-0.15px] font-normal text-text py-2.5 leading-normal"
+            className="flex-1 resize-none bg-transparent border-none outline-none text-[15px] tracking-[-0.15px] font-normal text-text py-2.5 leading-normal disabled:cursor-not-allowed disabled:text-text-dim"
             style={{ fontFamily: 'var(--font-display)', maxHeight: 120 }}
             value={value}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             rows={1}
+            disabled={disabled}
           />
         )}
       </div>
 
       {/* Action button — white icon on dark accent */}
       <button
-        className="bg-accent rounded-[6px] w-11 h-11 flex items-center justify-center shrink-0 cursor-pointer border-none press-spring text-white"
+        className="bg-accent rounded-[6px] w-11 h-11 flex items-center justify-center shrink-0 cursor-pointer border-none press-spring text-white disabled:cursor-not-allowed disabled:opacity-50"
         onClick={handleActionClick}
+        disabled={disabled}
       >
         {renderActionIcon()}
       </button>

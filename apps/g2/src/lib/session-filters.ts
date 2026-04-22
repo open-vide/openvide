@@ -28,7 +28,7 @@ export function filterSessionsByChip(sessions: WebSession[], filter: SessionFilt
 
   const visible = sessions.filter((session) => !isScheduledSession(session) && !isTeamSession(session));
   if (filter === 'all') return visible;
-  if (filter === 'running') return visible.filter((session) => session.status === 'running');
+  if (filter === 'running') return visible.filter((session) => session.status === 'running' || session.status === 'awaiting_approval');
   if (filter === 'failed') return visible.filter(isFailedSession);
-  return visible.filter((session) => session.status !== 'running' && !isFailedSession(session));
+  return visible.filter((session) => session.status !== 'running' && session.status !== 'awaiting_approval' && !isFailedSession(session));
 }

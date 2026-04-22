@@ -4,6 +4,7 @@ import { useBridge } from '../contexts/bridge';
 import { rpcForHost } from '../lib/bridge-hosts';
 import { ProviderBadge } from '../components/chat/provider-badge';
 import { useTranslation } from '../hooks/useTranslation';
+import { useSettings } from '../hooks/use-settings';
 
 const TOOLS: { id: 'claude' | 'codex' | 'gemini'; label: string; description: string }[] = [
   { id: 'claude', label: 'Claude', description: 'Anthropic Claude Code CLI' },
@@ -16,6 +17,7 @@ export function ToolPickerRoute() {
   const [searchParams] = useSearchParams();
   const { hosts, activeHostId } = useBridge();
   const { t } = useTranslation();
+  const { data: settings } = useSettings();
   const [creating, setCreating] = useState<string | null>(null);
 
   const cwd = searchParams.get('cwd') ?? '';
@@ -32,12 +34,16 @@ export function ToolPickerRoute() {
         const bridgeConfig = (bridgeRes?.bridgeConfig ?? {}) as { defaultCwd?: string };
         resolvedCwd = bridgeConfig.defaultCwd?.trim() ?? '~';
       }
-      const res = (await rpcForHost(hosts, hostId, 'session.create', {
+      const params: Record<string, unknown> = {
         hostId,
         tool,
         cwd: resolvedCwd,
         autoAccept: true,
-      })) as { ok?: boolean; session?: { id?: string } };
+      };
+      if (tool === 'codex' && settings?.codexPermissionMode === 'ask') {
+        params.permissionMode = 'ask';
+      }
+      const res = (await rpcForHost(hosts, hostId, 'session.create', params)) as { ok?: boolean; session?: { id?: string } };
       const sessionId = typeof res?.session?.id === 'string' ? res.session.id : null;
       if (sessionId) {
         navigate(`/chat?id=${encodeURIComponent(sessionId)}`, { replace: true });

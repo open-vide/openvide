@@ -17,6 +17,42 @@ export function resetThinkingCounter(): void {
 // Prefix constants
 export const THINK_HEADER = '§TH§';
 export const THINK_BODY = '§TB§';
+export const AGENT_MESSAGE_DELTA = '§AD§';
+export const AGENT_MESSAGE_FINAL = '§AF§';
+
+export interface AgentMessageDelta {
+  id: string;
+  text: string;
+}
+
+export function encodeAgentMessageDelta(id: string, text: string): string {
+  return `${AGENT_MESSAGE_DELTA}${JSON.stringify({ id, text })}`;
+}
+
+export function encodeAgentMessageFinal(id: string, text: string): string {
+  return `${AGENT_MESSAGE_FINAL}${JSON.stringify({ id, text })}`;
+}
+
+function parseAgentMessagePayload(line: string, prefix: string): AgentMessageDelta | null {
+  if (!line.startsWith(prefix)) return null;
+  try {
+    const payload = JSON.parse(line.slice(prefix.length));
+    if (!payload || typeof payload !== 'object') return null;
+    const id = typeof payload.id === 'string' ? payload.id : '';
+    const text = typeof payload.text === 'string' ? payload.text : '';
+    return { id, text };
+  } catch {
+    return null;
+  }
+}
+
+export function parseAgentMessageDelta(line: string): AgentMessageDelta | null {
+  return parseAgentMessagePayload(line, AGENT_MESSAGE_DELTA);
+}
+
+export function parseAgentMessageFinal(line: string): AgentMessageDelta | null {
+  return parseAgentMessagePayload(line, AGENT_MESSAGE_FINAL);
+}
 
 export function isThinkingHeader(line: string): boolean {
   return line.startsWith(THINK_HEADER);
@@ -117,8 +153,8 @@ function parseCliObject(obj: any): string[] {
     return parseCodexResponseItem(obj.payload);
   }
 
-  if (obj.type === 'item.completed' && obj.item) {
-    return parseCodexItem(obj.item);
+  if ((obj.type === 'item.completed' || obj.type === 'item.created') && obj.item) {
+    return parseCodexItem(obj.item, obj.type);
   }
 
   if (obj.type === 'turn.completed') return [];
@@ -159,6 +195,7 @@ function extractTextBlocks(content: any, expectedTypes: string[]): string {
 
 function parseUserMessage(message: any): string[] {
   const text = extractTextBlocks(message?.content, ['input_text']);
+  if (isCodexControlMessage(text)) return [];
   return text ? [`§P§${text}`] : [];
 }
 
@@ -227,6 +264,7 @@ function parseCodexResponseItem(payload: any): string[] {
       role === 'user' ? ['input_text'] : ['output_text'],
     );
     if (!text) return [];
+    if (role === 'user' && isCodexControlMessage(text)) return [];
     return role === 'user' ? [`§P§${text}`] : splitIntoLines(text);
   }
 
@@ -254,9 +292,23 @@ function parseCodexResponseItem(payload: any): string[] {
   return [];
 }
 
-function parseCodexItem(item: any): string[] {
-  if (item.type === 'agent_message' && item.text) {
-    return splitIntoLines(item.text);
+function parseCodexItem(item: any, eventType?: string): string[] {
+  if (item.type === 'agent_message' && typeof item.text === 'string') {
+    const id = typeof item.id === 'string' ? item.id : 'agent_message';
+    if (eventType === 'item.created') {
+      return item.text ? [encodeAgentMessageDelta(id, item.text)] : [];
+    }
+    return item.text ? [encodeAgentMessageFinal(id, item.text)] : [];
+  }
+  if (item.type === 'message') {
+    const role = typeof item.role === 'string' ? item.role : '';
+    const text = extractTextBlocks(
+      item.content,
+      role === 'user' ? ['input_text'] : ['output_text'],
+    );
+    if (!text) return [];
+    if (role === 'user' && isCodexControlMessage(text)) return [];
+    return role === 'user' ? [`§P§${text}`] : splitIntoLines(text);
   }
   if (item.type === 'reasoning' && item.text) {
     const id = thinkingCounter++;
@@ -268,7 +320,7 @@ function parseCodexItem(item: any): string[] {
     }
     return result;
   }
-  if (item.type === 'tool_call') {
+  if (item.type === 'tool_call' || item.type === 'function_call') {
     return [`>> ${item.name ?? 'tool'}`];
   }
   return [];
@@ -290,4 +342,8 @@ function stripMarkdown(text: string): string {
 
 function splitIntoLines(text: string): string[] {
   return text.split('\n').map((l) => stripMarkdown(l.trim())).filter(Boolean);
+}
+
+function isCodexControlMessage(text: string): boolean {
+  return /^<turn_aborted(?:\s|>|$)/.test(text.trim());
 }

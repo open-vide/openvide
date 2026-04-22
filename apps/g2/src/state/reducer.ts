@@ -11,6 +11,7 @@ const defaultSettings: Settings = {
   showToolDetails: true,
   pollInterval: 2500,
   showHiddenFiles: false,
+  codexPermissionMode: 'auto',
   sttProvider: 'soniox',
   sttApiKey: '',
 };
@@ -75,7 +76,7 @@ export function getSessionActions(state: AppState): ActionItem[] {
   if (session.status === 'idle' || session.status === 'failed' || session.status === 'cancelled' || session.status === 'interrupted') {
     actions.push({ id: 'viewDiffs', label: t('action.viewDiffs', lang) });
   }
-  if (session.status === 'running') {
+  if (session.status === 'running' || session.status === 'awaiting_approval') {
     actions.push({ id: 'cancel', label: t('action.cancel', lang) });
   }
   actions.push({ id: 'delete', label: t('action.delete', lang) });

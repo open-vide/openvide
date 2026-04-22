@@ -3,6 +3,7 @@ import { cn } from 'even-toolkit/web/cn';
 const statusColors: Record<string, string> = {
   idle: 'bg-text-dim',
   running: 'bg-accent animate-pulse-status',
+  awaiting_approval: 'bg-accent-warning animate-pulse-fast',
   failed: 'bg-negative',
   cancelled: 'bg-accent-warning',
   interrupted: 'bg-accent-warning',

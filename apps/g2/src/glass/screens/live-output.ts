@@ -14,24 +14,20 @@ import { line, separator } from 'even-toolkit/types';
 import { compactHeader } from '../header';
 import { truncate, applyScrollIndicators } from 'even-toolkit/text-utils';
 import { buildActionBar } from 'even-toolkit/action-bar';
-import { createModeEncoder } from 'even-toolkit/glass-mode';
 import { moveHighlight, clampIndex } from 'even-toolkit/glass-nav';
 import { fieldJoin, SEP } from 'even-toolkit/glass-format';
 import type { OpenVideSnapshot, OpenVideActions } from '../types';
 import { resolveGlassSessionMeta } from '../session-meta';
+import { liveOutputChatMode as chatMode } from '../live-output-mode';
 import {
+  parseAgentMessageDelta,
+  parseAgentMessageFinal,
   isThinkingHeader, isThinkingBody,
   parseThinkingHeader, parseThinkingBody,
   THINK_HEADER,
 } from '../../domain/output-parser';
-
-const chatMode = createModeEncoder({
-  buttons: 0,
-  read: 100,        // read collapsed: offset = block index
-  readOpen: 200,    // read expanded: offset = block index (current block is open)
-  modeSelect: 300,
-  modelSelect: 400,
-});
+import { t as translate } from '../../utils/i18n';
+import type { AppLanguage } from '../../utils/i18n';
 
 const MODE_OPTIONS = [
   { id: 'auto', label: 'Auto' },
@@ -75,6 +71,75 @@ function getModelLabel(tool: string | undefined, model: string): string {
 
 function getChatButtons(currentMode: string, currentModelLabel: string): string[] {
   return ['Input', 'Read', currentMode, currentModelLabel];
+}
+
+type GlassSession = OpenVideSnapshot['sessions'][number];
+type GlassPendingPermission = NonNullable<GlassSession['pendingPermission']>;
+
+function getPendingPermission(session: GlassSession | null): GlassPendingPermission | null {
+  const permission = session?.pendingPermission;
+  return permission?.status === 'pending' ? permission : null;
+}
+
+function getTerminalPermissionLine(session: GlassSession | null): string | null {
+  const status = session?.pendingPermission?.status;
+  if (status === 'cancelled') return 'Aborted run.';
+  if (status === 'expired') return 'Permission request expired.';
+  return null;
+}
+
+function getPermissionButtons(lang: AppLanguage): string[] {
+  return [
+    translate('permission.approve', lang),
+    translate('permission.reject', lang),
+    translate('permission.abortRun', lang),
+    translate('permission.read', lang),
+  ];
+}
+
+function getPermissionKindLabel(kind: GlassPendingPermission['kind'], lang: AppLanguage): string {
+  if (kind === 'file_write') return translate('permission.fileAccess', lang);
+  if (kind === 'network') return translate('permission.network', lang);
+  if (kind === 'dangerous_action') return translate('permission.highRisk', lang);
+  if (kind === 'command') return translate('permission.command', lang);
+  return translate('permission.generic', lang);
+}
+
+function getRiskLabel(risk: NonNullable<GlassPendingPermission['risk']>, lang: AppLanguage): string {
+  if (risk === 'low') return translate('permission.risk.low', lang);
+  if (risk === 'medium') return translate('permission.risk.medium', lang);
+  return translate('permission.risk.high', lang);
+}
+
+function buildPermissionLines(permission: GlassPendingPermission, lang: AppLanguage) {
+  const detail = permission.command
+    ?? permission.files?.join(', ')
+    ?? permission.description
+    ?? permission.reason
+    ?? '';
+
+  const title = permission.title?.trim() || translate('permission.approvalNeeded', lang);
+  const rows = [
+    line(truncate(title, 62), 'normal'),
+  ];
+
+  if (permission.description) {
+    rows.push(line(truncate(permission.description, 62), 'meta'));
+  }
+  if (detail && detail !== permission.description) {
+    rows.push(line(truncate(detail, 62), 'normal'));
+  }
+
+  const risk = permission.risk ? getRiskLabel(permission.risk, lang) : undefined;
+  rows.push(line(fieldJoin(getPermissionKindLabel(permission.kind, lang), risk), 'meta'));
+  return rows;
+}
+
+function decisionForPermissionButton(buttonIndex: number): 'approve_once' | 'reject' | 'abort_run' | null {
+  if (buttonIndex === 0) return 'approve_once';
+  if (buttonIndex === 1) return 'reject';
+  if (buttonIndex === 2) return 'abort_run';
+  return null;
 }
 
 function getActionBarState(
@@ -121,6 +186,8 @@ interface ChatBlock {
 function buildBlocks(outputLines: string[]): ChatBlock[] {
   const blocks: ChatBlock[] = [];
   let textAccum: string[] = [];
+  let activeAgentDeltaId: string | null = null;
+  const agentMessageStateById = new Map<string, { blockIndex: number }>();
 
   const flushText = () => {
     if (textAccum.length === 0) return;
@@ -133,7 +200,77 @@ function buildBlocks(outputLines: string[]): ChatBlock[] {
     textAccum = [];
   };
 
+  const updateTextBlockSummary = (block: ChatBlock) => {
+    block.summary = truncate(block.detail[0] ?? '', 60);
+  };
+
+  const appendAgentText = (targetLines: string[], deltaText: string, continuesCurrentMessage: boolean) => {
+    const source = continuesCurrentMessage ? deltaText : deltaText.trimStart();
+    if (!source) return;
+
+    const parts = source.split('\n');
+    for (let i = 0; i < parts.length; i += 1) {
+      const part = parts[i];
+      if (i === 0 && continuesCurrentMessage && targetLines.length > 0) {
+        targetLines[targetLines.length - 1] += part;
+        continue;
+      }
+      const lineText = part.trim();
+      if (lineText) {
+        targetLines.push(lineText);
+      }
+    }
+  };
+
+  const splitAgentText = (text: string): string[] => text
+    .split('\n')
+    .map((lineText) => lineText.trim())
+    .filter(Boolean);
+
   for (const text of outputLines) {
+    const agentDelta = parseAgentMessageDelta(text);
+    if (agentDelta) {
+      flushText();
+      let state = agentMessageStateById.get(agentDelta.id);
+      if (!state) {
+        blocks.push({
+          kind: 'text',
+          summary: '',
+          detail: [],
+        });
+        state = { blockIndex: blocks.length - 1 };
+        agentMessageStateById.set(agentDelta.id, state);
+      }
+
+      const block = blocks[state.blockIndex];
+      if (block?.kind === 'text') {
+        const continuesCurrentMessage = activeAgentDeltaId === agentDelta.id && block.detail.length > 0;
+        appendAgentText(block.detail, agentDelta.text, continuesCurrentMessage);
+        updateTextBlockSummary(block);
+      }
+      activeAgentDeltaId = agentDelta.id;
+      continue;
+    }
+
+    const agentFinal = parseAgentMessageFinal(text);
+    if (agentFinal) {
+      const finalLines = splitAgentText(agentFinal.text);
+      if (finalLines.length === 0) continue;
+      flushText();
+      const state = agentMessageStateById.get(agentFinal.id);
+      const block = state ? blocks[state.blockIndex] : undefined;
+      if (block?.kind === 'text') {
+        block.detail = finalLines;
+        updateTextBlockSummary(block);
+      } else {
+        textAccum.push(...finalLines);
+      }
+      activeAgentDeltaId = null;
+      continue;
+    }
+
+    activeAgentDeltaId = null;
+
     // Thinking header
     if (isThinkingHeader(text)) {
       flushText();
@@ -340,14 +477,20 @@ export const liveOutputScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
     const selectedSession = snap.selectedSessionId
       ? snap.sessions.find((session) => session.id === snap.selectedSessionId) ?? null
       : null;
+    const pendingPermission = getPendingPermission(selectedSession);
+    const terminalPermissionLine = getTerminalPermissionLine(selectedSession);
+    const outputLines = terminalPermissionLine && !snap.outputLines.includes(terminalPermissionLine)
+      ? [...snap.outputLines, terminalPermissionLine]
+      : snap.outputLines;
     const tool = sessionMeta.tool?.toUpperCase() ?? 'AI';
     const model = sessionMeta.model ? truncate(sessionMeta.model, 10) : '';
     const status = sessionMeta.status;
-    const contextPct = snap.outputLines.length > 0 ? Math.min(Math.round((snap.outputLines.length / 200) * 100), 99) : 0;
+    const contextPct = outputLines.length > 0 ? Math.min(Math.round((outputLines.length / 200) * 100), 99) : 0;
+    const lang = snap.settings.language;
     // Detect pending reply (session idle but last output ends with ?)
-    const lastLine = snap.outputLines[snap.outputLines.length - 1]?.trim() ?? '';
-    const isPending = status === 'idle' && snap.outputLines.length > 0 && lastLine.endsWith('?');
-    const statusLabel = status === 'running' ? 'run' : isPending ? 'pending' : undefined;
+    const lastLine = outputLines[outputLines.length - 1]?.trim() ?? '';
+    const isPending = status === 'idle' && outputLines.length > 0 && lastLine.endsWith('?');
+    const statusLabel = pendingPermission ? translate('session.statusApproval', lang) : status === 'running' ? 'run' : isPending ? 'pending' : undefined;
     const title = fieldJoin(tool, statusLabel, contextPct > 0 ? `${contextPct}%` : undefined);
 
     const mode = chatMode.getMode(nav.highlightedIndex);
@@ -362,23 +505,36 @@ export const liveOutputScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
     const currentModel = mode === 'modelSelect'
       ? (modelOptions[clampIndex(chatMode.getOffset(nav.highlightedIndex), modelOptions.length)]?.id ?? currentSessionModel)
       : currentSessionModel;
-    const buttons = getChatButtons(getModeLabel(currentMode), getModelLabel(sessionMeta.tool, currentModel));
+    const buttons = pendingPermission && mode === 'buttons'
+      ? getPermissionButtons(lang)
+      : getChatButtons(getModeLabel(currentMode), getModelLabel(sessionMeta.tool, currentModel));
 
     const { selectedIndex, activeLabel } = getActionBarState(mode, nav.highlightedIndex, buttons);
     const actionBar = buildActionBar(buttons, selectedIndex, activeLabel);
 
-    const blocks = buildBlocks(snap.outputLines);
+    const blocks = buildBlocks(outputLines);
     const lastBlock = blocks[blocks.length - 1];
     // Show the thinking indicator whenever the last block is a user prompt
     // and no assistant content has arrived yet. Tool-agnostic — Claude streams
     // while `status === 'running'`, but Codex/Gemini often respond in one shot
     // (and external CLI writes keep `status === 'idle'` entirely), so relying
     // only on `status === 'running'` would miss those cases.
-    const showProcessing = !!lastBlock && lastBlock.kind === 'prompt';
+    const showProcessing = !!lastBlock
+      && lastBlock.kind === 'prompt'
+      && (status === 'running' || status === 'awaiting_approval');
     const selectedHostConnected = isEffectiveHostConnected(snap, selectedSession?.hostId);
     const showOfflineWarning = !selectedHostConnected;
     // One row reserved vs. raw grid so the last line isn't clipped by the glass display.
     const contentSlots = showProcessing ? 5 : 6;
+
+    if (pendingPermission && mode === 'buttons') {
+      return {
+        lines: [
+          ...compactHeader(title, actionBar, showOfflineWarning ? '! offline' : undefined),
+          ...buildPermissionLines(pendingPermission, lang),
+        ],
+      };
+    }
 
     if (blocks.length === 0) {
       return {
@@ -416,10 +572,17 @@ export const liveOutputScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
     const mode = chatMode.getMode(nav.highlightedIndex);
     const blocks = buildBlocks(snap.outputLines);
     const sessionMeta = resolveGlassSessionMeta(snap);
+    const lang = snap.settings.language;
+    const selectedSession = snap.selectedSessionId
+      ? snap.sessions.find((session) => session.id === snap.selectedSessionId) ?? null
+      : null;
+    const pendingPermission = getPendingPermission(selectedSession);
     const currentMode = snap.selectedSessionMode || 'auto';
     const currentModel = snap.selectedSessionModel || sessionMeta.model || (sessionMeta.tool === 'claude' ? 'opus' : '');
     const modelOptions = getModelOptions(sessionMeta.tool, currentModel);
-    const buttons = getChatButtons(getModeLabel(currentMode), getModelLabel(sessionMeta.tool, currentModel));
+    const buttons = pendingPermission && mode === 'buttons'
+      ? getPermissionButtons(lang)
+      : getChatButtons(getModeLabel(currentMode), getModelLabel(sessionMeta.tool, currentModel));
 
     if (mode === 'buttons') {
       if (action.type === 'HIGHLIGHT_MOVE') {
@@ -428,6 +591,25 @@ export const liveOutputScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = 
       }
       if (action.type === 'SELECT_HIGHLIGHTED') {
         const btnIdx = clampIndex(nav.highlightedIndex, buttons.length);
+        if (pendingPermission) {
+          const decision = decisionForPermissionButton(btnIdx);
+          if (decision && snap.selectedSessionId) {
+            void ctx.rpc('session.permission.respond', {
+              id: snap.selectedSessionId,
+              requestId: pendingPermission.requestId,
+              decision,
+            });
+            return nav;
+          }
+          if (btnIdx === 3) {
+            const allLines = buildAllLines(blocks, -1);
+            const lastLine = Math.max(0, allLines.length - 1);
+            const nextHighlightedIndex = chatMode.encode('read', lastLine);
+            ctx.setSessionReadNavIndex(nextHighlightedIndex);
+            return { ...nav, highlightedIndex: nextHighlightedIndex };
+          }
+          return nav;
+        }
         if (btnIdx === 0) {
           if (snap.selectedSessionId && (snap.suggestedPrompts.length > 0 || snap.prompts.length > 0)) {
             ctx.navigate(`/prompt-select?session=${encodeURIComponent(snap.selectedSessionId)}`);

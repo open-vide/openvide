@@ -35,6 +35,10 @@ function formatTimeAgo(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function formatStatus(status: string, translate: (key: string) => string): string {
+  return status === 'awaiting_approval' ? translate('web.statusApproval') : status;
+}
+
 export function WorkspaceDetailRoute() {
   const [searchParams] = useSearchParams();
   const wsPath = searchParams.get('path') ?? '';
@@ -89,6 +93,7 @@ export function WorkspaceDetailRoute() {
 
   const statusVariant = (status: string) => {
     if (status === 'running') return 'positive' as const;
+    if (status === 'awaiting_approval') return 'neutral' as const;
     if (status === 'error' || status === 'failed') return 'negative' as const;
     return 'neutral' as const;
   };
@@ -156,7 +161,7 @@ export function WorkspaceDetailRoute() {
           {s.origin === 'native' && <Badge variant="neutral">native</Badge>}
           {isScheduledSession(s) && <Badge variant="neutral">scheduled</Badge>}
           {isTeamSession(s) && <Badge variant="neutral">team</Badge>}
-          <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+          <Badge variant={statusVariant(s.status)}>{formatStatus(s.status, t)}</Badge>
         </div>
       }
       onPress={() => {
@@ -165,7 +170,7 @@ export function WorkspaceDetailRoute() {
           navigate(`/chat?id=${sessionId}`);
         })();
       }}
-      onDelete={showDismiss && s.status !== 'running' ? () => dismissSession.mutate({ sessionId: s.id, sessions: wsSessions }) : undefined}
+      onDelete={showDismiss && s.status !== 'running' && s.status !== 'awaiting_approval' ? () => dismissSession.mutate({ sessionId: s.id, sessions: wsSessions }) : undefined}
     />
   );
 

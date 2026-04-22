@@ -93,7 +93,7 @@ export function WorkspacesRoute() {
   );
   const allSessions = visibleSessions;
   const totalSessions = allSessions.length;
-  const runningSessions = allSessions.filter((s) => s.status === 'running');
+  const runningSessions = allSessions.filter((s) => s.status === 'running' || s.status === 'awaiting_approval');
   const runningCount = runningSessions.length;
   const pendingCount = 0; // permissions tracked elsewhere
 
@@ -242,7 +242,7 @@ export function WorkspacesRoute() {
             <div className="flex flex-col gap-1.5">
               {visibleWorkspaces.map((ws) => {
                 const wsSessions = allSessions.filter((s) => s.workingDirectory === ws.path && (!ws.hostId || s.hostId === ws.hostId));
-                const running = wsSessions.filter((s) => s.status === 'running').length;
+                const running = wsSessions.filter((s) => s.status === 'running' || s.status === 'awaiting_approval').length;
                 const host = ws.hostId ? hosts.find((h) => h.id === ws.hostId) : null;
 
                 return (

@@ -26,6 +26,7 @@ function mapHostSessions(raw: any[], hostId?: string): WebSession[] {
     title: s.title,
     summary: s.summary,
     messageCount: s.messageCount,
+    pendingPermission: s.pendingPermission,
   }));
 }
 
@@ -118,6 +119,7 @@ export function useSessions(pollInterval: number = DEFAULT_POLL_INTERVAL) {
       return allSessions;
     },
     refetchInterval: pollInterval,
+    refetchIntervalInBackground: true,
     staleTime: pollInterval / 2,
   });
 }

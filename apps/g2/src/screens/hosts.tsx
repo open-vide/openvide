@@ -87,7 +87,7 @@ export function HostsRoute() {
                 const status = hostStatuses[host.id] ?? 'disconnected';
                 const isConnected = status === 'connected';
                 const hostSessions = sessions?.filter((s) => s.hostId === host.id) ?? [];
-                const runningCount = hostSessions.filter((s) => s.status === 'running').length;
+                const runningCount = hostSessions.filter((s) => s.status === 'running' || s.status === 'awaiting_approval').length;
 
                 return (
                   <ListItem

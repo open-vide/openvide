@@ -10,14 +10,14 @@ export function useWorkspaces(sessions: WebSession[] | undefined): WebWorkspace[
       const existing = wsMap.get(key);
       if (existing) {
         existing.sessionCount++;
-        if (s.status === 'running') existing.runningCount++;
+        if (s.status === 'running' || s.status === 'awaiting_approval') existing.runningCount++;
       } else {
         wsMap.set(key, {
           path: s.workingDirectory,
           hostId: s.hostId,
           name: s.workingDirectory.split('/').pop() ?? s.workingDirectory,
           sessionCount: 1,
-          runningCount: s.status === 'running' ? 1 : 0,
+          runningCount: s.status === 'running' || s.status === 'awaiting_approval' ? 1 : 0,
         });
       }
     }

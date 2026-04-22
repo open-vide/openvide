@@ -32,6 +32,10 @@ function formatTimeAgo(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function formatStatus(status: string, translate: (key: string) => string): string {
+  return status === 'awaiting_approval' ? translate('web.statusApproval') : status;
+}
+
 const EMPTY_SESSION_DRAFT = {
   tool: 'claude',
   model: '',
@@ -112,6 +116,7 @@ export function SessionsRoute() {
 
   const statusVariant = (status: string) => {
     if (status === 'running') return 'positive' as const;
+    if (status === 'awaiting_approval') return 'neutral' as const;
     if (status === 'error' || status === 'failed') return 'negative' as const;
     return 'neutral' as const;
   };
@@ -120,7 +125,7 @@ export function SessionsRoute() {
     { id: 'all', label: `All (${visibleSessions.length})` },
     { id: 'scheduled', label: `Scheduled (${scheduledSessions.length})` },
     { id: 'team', label: `Team (${teamSessions.length})` },
-    { id: 'running', label: `Running (${visibleSessions.filter((s) => s.status === 'running').length})` },
+    { id: 'running', label: `Running (${visibleSessions.filter((s) => s.status === 'running' || s.status === 'awaiting_approval').length})` },
     { id: 'idle', label: 'Idle' },
     { id: 'failed', label: 'Failed' },
   ];
@@ -232,7 +237,7 @@ export function SessionsRoute() {
                         {s.origin === 'native' && <Badge variant="neutral">native</Badge>}
                         {isScheduledSession(s) && <Badge variant="neutral">scheduled</Badge>}
                         {isTeamSession(s) && <Badge variant="neutral">team</Badge>}
-                        <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                        <Badge variant={statusVariant(s.status)}>{formatStatus(s.status, t)}</Badge>
                       </div>
                     }
                     onPress={() => {
@@ -241,7 +246,7 @@ export function SessionsRoute() {
                         navigate(`/chat?id=${sessionId}`);
                       })();
                     }}
-                    onDelete={s.status !== 'running' ? () => dismissSession.mutate({ sessionId: s.id, sessions: allSessions }) : undefined}
+                    onDelete={s.status !== 'running' && s.status !== 'awaiting_approval' ? () => dismissSession.mutate({ sessionId: s.id, sessions: allSessions }) : undefined}
                   />
                 );
               })}

@@ -7,8 +7,7 @@ import { useSessions } from '../hooks/use-sessions';
 import { useModels } from '../hooks/use-models';
 import { useSettings } from '../hooks/use-settings';
 import { usePrompts } from '../hooks/use-prompts';
-import { useSendPrompt, useCancelSession } from '../hooks/use-send-prompt';
-import { useBridge } from '../contexts/bridge';
+import { useSendPrompt, useCancelSession, useRespondToPermission } from '../hooks/use-send-prompt';
 import { useTranslation } from '../hooks/useTranslation';
 import { StatusDot } from '../components/shared/status-dot';
 import { ChatBubble } from '../components/chat/chat-bubble';
@@ -16,8 +15,9 @@ import { ChatInput } from '../components/chat/chat-input';
 import { CodeBlock } from '../components/chat/code-block';
 import { ThinkingBlock } from '../components/chat/thinking-block';
 import { ToolUseCard } from '../components/chat/tool-use-card';
+import { PermissionApprovalCard } from '../components/chat/permission-approval-card';
 import { IcEditSettings, IcFeatInterfaceSettings } from 'even-toolkit/web/icons/svg-icons';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, PendingPermissionRequest, PermissionDecision } from '../types';
 
 /* ── Thinking label (cycles verbs like Claude Code) ── */
 
@@ -41,6 +41,46 @@ function ThinkingLabel() {
       {verb}…
     </span>
   );
+}
+
+function permissionDecisionText(decision: PermissionDecision): string {
+  if (decision === 'approve_once') return 'Approved once';
+  if (decision === 'reject') return 'Rejected';
+  return 'Aborted run';
+}
+
+function permissionStatusText(status: PendingPermissionRequest['status']): string {
+  if (status === 'approved') return 'Approved once';
+  if (status === 'rejected') return 'Rejected';
+  if (status === 'cancelled') return 'Aborted run';
+  if (status === 'expired') return 'Permission request expired';
+  return '';
+}
+
+function PermissionResolutionNotice({
+  label,
+  continuing,
+}: {
+  label: string;
+  continuing: boolean;
+}) {
+  return (
+    <div className="self-start max-w-[88%] rounded-[6px] border border-border bg-surface px-3 py-2 text-[13px] text-text-dim">
+      {label}{continuing ? '. Continuing...' : '.'}
+    </div>
+  );
+}
+
+function splitMessagesAroundLatestUser(messages: ChatMessage[]): {
+  before: ChatMessage[];
+  after: ChatMessage[];
+} {
+  const lastUserIndex = messages.map((message) => message.role).lastIndexOf('user');
+  if (lastUserIndex < 0) return { before: messages, after: [] };
+  return {
+    before: messages.slice(0, lastUserIndex + 1),
+    after: messages.slice(lastUserIndex + 1),
+  };
 }
 
 /* ── Provider color lookup ── */
@@ -156,7 +196,7 @@ export function ChatRoute() {
   const { data: prompts } = usePrompts();
   const sendPrompt = useSendPrompt(sessions);
   const cancelSession = useCancelSession(sessions);
-  const { ensureBridgeForSession } = useBridge();
+  const respondToPermission = useRespondToPermission(sessions);
   const { t } = useTranslation();
 
   const session = sessions?.find((s) => s.id === sessionId);
@@ -184,12 +224,17 @@ export function ChatRoute() {
   const dirName = session?.workingDirectory?.split('/').pop() ?? '';
   const providerColor = getProviderColor(session?.tool);
   const isRunning = session?.status === 'running';
+  const pendingPermission = session?.pendingPermission?.status === 'pending' ? session.pendingPermission : null;
+  const resolvedPermission = session?.pendingPermission && session.pendingPermission.status !== 'pending'
+    ? session.pendingPermission
+    : null;
+  const isAwaitingApproval = session?.status === 'awaiting_approval';
 
   // Detect if Claude is waiting for user reply
   // When session is idle and last assistant message ends with a question
   const lastMsg = messages[messages.length - 1];
   const lastContent = lastMsg?.content ?? '';
-  const isPendingReply = !isRunning && session?.status === 'idle' && lastMsg?.role === 'assistant' &&
+  const isPendingReply = !isRunning && !isAwaitingApproval && session?.status === 'idle' && lastMsg?.role === 'assistant' &&
     messages.length > 1 && lastContent.trim().endsWith('?');
 
   const [input, setInput] = useState('');
@@ -197,6 +242,10 @@ export function ChatRoute() {
   const [selectedMode, setSelectedMode] = useState('auto');
   const [selectedModel, setSelectedModel] = useState(session?.model ?? '');
   const [pendingUserMsg, setPendingUserMsg] = useState<string | null>(null);
+  const [permissionDecision, setPermissionDecision] = useState<{
+    requestId: string;
+    decision: PermissionDecision;
+  } | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -234,7 +283,31 @@ export function ChatRoute() {
   // new incoming content. The user explicitly wants the view pinned to the end.
   useEffect(() => {
     requestAnimationFrame(() => scrollToLatest('auto'));
-  }, [messages, pendingUserMsg, sessionId, scrollToLatest]);
+  }, [
+    messages,
+    pendingUserMsg,
+    permissionDecision,
+    pendingPermission?.requestId,
+    resolvedPermission?.status,
+    sessionId,
+    scrollToLatest,
+  ]);
+
+  useEffect(() => {
+    setPermissionDecision(null);
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!permissionDecision) return;
+    const currentRequestId = pendingPermission?.requestId ?? resolvedPermission?.requestId ?? null;
+    if (currentRequestId !== permissionDecision.requestId) {
+      setPermissionDecision(null);
+      return;
+    }
+    if (resolvedPermission?.requestId === permissionDecision.requestId) {
+      setPermissionDecision(null);
+    }
+  }, [pendingPermission?.requestId, permissionDecision, resolvedPermission?.requestId, resolvedPermission?.status]);
 
   const handleScroll = useCallback(() => {
     // Intentional no-op: the chat view is always pinned to the latest message.
@@ -253,6 +326,7 @@ export function ChatRoute() {
     if (!text || !sessionId) return;
     setInput('');
     setPendingUserMsg(text);
+    setPermissionDecision(null);
     scrollToLatest('auto');
     const opts: any = { sessionId, prompt: text };
     if (selectedMode !== 'auto') opts.mode = selectedMode;
@@ -265,6 +339,7 @@ export function ChatRoute() {
     const text = prompt.trim();
     if (!text) return;
     setPendingUserMsg(text);
+    setPermissionDecision(null);
     scrollToLatest('auto');
     const opts: any = { sessionId, prompt: text };
     if (selectedMode !== 'auto') opts.mode = selectedMode;
@@ -276,12 +351,49 @@ export function ChatRoute() {
     if (sessionId) cancelSession.mutate(sessionId);
   }, [sessionId, cancelSession]);
 
+  const handlePermissionDecision = useCallback((decision: PermissionDecision) => {
+    if (!sessionId || !pendingPermission) return;
+    setPermissionDecision({
+      requestId: pendingPermission.requestId,
+      decision,
+    });
+    respondToPermission.mutate({
+      sessionId,
+      requestId: pendingPermission.requestId,
+      decision,
+    });
+  }, [pendingPermission, respondToPermission, sessionId]);
+
   const handlePromptSelect = (prompt: string) => {
     sendQuickPrompt(prompt);
     setShowPromptPicker(false);
   };
 
   const showToolDetails = settings?.showToolDetails ?? true;
+  const fallbackMessages: ChatMessage[] = messages.length === 0 && session?.lastPrompt
+    ? [{ role: 'user', content: session.lastPrompt, timestamp: new Date(session.updatedAt).getTime() }]
+    : messages.length === 0 && pendingPermission
+      ? [{ role: 'user', content: t('chat.lastPromptUnavailable'), timestamp: new Date(session?.updatedAt ?? Date.now()).getTime() }]
+    : messages;
+  const resolvedLabel = resolvedPermission
+    ? permissionStatusText(resolvedPermission.status)
+    : (permissionDecision ? permissionDecisionText(permissionDecision.decision) : '');
+  const showResolutionNotice = !!resolvedLabel && !pendingPermission;
+  const permissionCanContinue = resolvedPermission
+    ? resolvedPermission.status === 'approved'
+    : permissionDecision?.decision === 'approve_once';
+  const isContinuingAfterPermission = !!permissionDecision
+    && permissionDecision.decision === 'approve_once'
+    && permissionCanContinue
+    && isRunning
+    && !messages.some((msg) => msg.role === 'assistant' && msg.content.trim());
+  const isTerminalPermissionResolution = showResolutionNotice && !permissionCanContinue;
+  const showInlineResolutionNotice = showResolutionNotice && !isTerminalPermissionResolution;
+  const showTerminalResolutionNotice = showResolutionNotice && isTerminalPermissionResolution;
+  const shouldPlacePermissionInTurn = !!pendingPermission || showResolutionNotice;
+  const visibleMessageGroups = shouldPlacePermissionInTurn
+    ? splitMessagesAroundLatestUser(fallbackMessages)
+    : { before: fallbackMessages, after: [] };
 
   return (
     <div className="flex flex-col h-full bg-bg">
@@ -308,6 +420,14 @@ export function ChatRoute() {
         </div>
       )}
 
+      {isAwaitingApproval && (
+        <div className="shrink-0 px-3 py-2 bg-accent-warning/10 flex items-center gap-3 border-b border-border">
+          <span className="text-[13px] text-text flex-1">
+            {t('web.awaitingApproval')}
+          </span>
+        </div>
+      )}
+
       {/* ── Messages ── */}
       <div className="relative flex-1 min-h-0">
         <div
@@ -315,7 +435,7 @@ export function ChatRoute() {
           onScroll={handleScroll}
           className="h-full overflow-y-auto px-3 pt-4 pb-3 flex flex-col gap-4"
         >
-          {messages.length === 0 ? (
+          {fallbackMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center flex-1 text-center">
               <div className="text-[24px] tracking-[-0.72px] opacity-30">{'\u{1F4AC}'}</div>
               <div className="text-text-dim text-[13px] tracking-[-0.13px] mt-2">
@@ -323,9 +443,9 @@ export function ChatRoute() {
               </div>
             </div>
           ) : (
-            messages.map((msg: ChatMessage, i: number) => (
+            visibleMessageGroups.before.map((msg: ChatMessage, i: number) => (
               <ChatBubble
-                key={i}
+                key={`before-${i}`}
                 role={msg.role}
                 tool={toolName}
                 timestamp={msg.timestamp}
@@ -343,15 +463,50 @@ export function ChatRoute() {
             </ChatBubble>
           )}
 
-          {/* Thinking indicator — shows whenever the last message is the user's and
-              no assistant reply has arrived yet. This covers all three tools: Claude
-              (streams over time), Codex, and Gemini (respond in one shot), and also
-              the "writing in external CLI" case where the daemon status stays idle. */}
+          {pendingPermission && (
+            <PermissionApprovalCard
+              permission={pendingPermission}
+              disabled={respondToPermission.isPending}
+              error={respondToPermission.error instanceof Error ? respondToPermission.error.message : undefined}
+              onDecision={handlePermissionDecision}
+            />
+          )}
+
+          {showInlineResolutionNotice && (
+            <PermissionResolutionNotice
+              label={resolvedLabel}
+              continuing={isContinuingAfterPermission}
+            />
+          )}
+
+          {visibleMessageGroups.after.map((msg: ChatMessage, i: number) => (
+            <ChatBubble
+              key={`after-${i}`}
+              role={msg.role}
+              tool={toolName}
+              timestamp={msg.timestamp}
+            >
+              {msg.thinking && <ThinkingBlock text={msg.thinking} />}
+              {renderContent(msg.content, showToolDetails)}
+            </ChatBubble>
+          ))}
+
+          {showTerminalResolutionNotice && (
+            <PermissionResolutionNotice
+              label={resolvedLabel}
+              continuing={false}
+            />
+          )}
+
+          {/* Thinking indicator — shown only while a turn is known to be active so
+              terminal permission decisions cannot leave stale processing text. */}
           {(() => {
-            const lastMessage = messages[messages.length - 1];
+            const lastMessage = fallbackMessages[fallbackMessages.length - 1];
+            const canShowProcessing = isRunning || pendingUserMsg != null || isAwaitingApproval;
             const waitingForAssistant = pendingUserMsg != null
-              || (messages.length > 0 && lastMessage?.role === 'user');
-            if (!waitingForAssistant) return null;
+              || (canShowProcessing && !isTerminalPermissionResolution && fallbackMessages.length > 0 && lastMessage?.role === 'user')
+              || isContinuingAfterPermission;
+            if (!waitingForAssistant || isAwaitingApproval) return null;
             return (
               <div className="flex items-center gap-2 px-1 py-2">
                 <span className="text-accent text-[15px] tracking-[-0.15px] status-breathe">✽</span>
@@ -430,7 +585,7 @@ export function ChatRoute() {
               </button>
             );
           })()}
-          {!isRunning && customPrompts.slice(0, 6).map((p) => (
+          {!isRunning && !isAwaitingApproval && customPrompts.slice(0, 6).map((p) => (
             <button
               key={p.id}
               type="button"
@@ -450,7 +605,8 @@ export function ChatRoute() {
             onVoiceStop={isRunning ? handleCancel : undefined}
             isListening={false}
             isRunning={isRunning}
-            placeholder={t('web.sendMessage') ?? 'Type a message...'}
+            disabled={isAwaitingApproval}
+            placeholder={isAwaitingApproval ? t('web.resolvePermissionToContinue') : (t('web.sendMessage') ?? 'Type a message...')}
           />
         </div>
       </div>

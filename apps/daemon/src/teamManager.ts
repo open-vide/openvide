@@ -83,6 +83,7 @@ export function createTeam(
       m.model,
       undefined,
       undefined,
+      undefined,
       { runKind: "team", teamId, teamName: name },
     );
     return {
@@ -164,6 +165,7 @@ export function updateTeam(
       member.tool,
       nextWorkingDirectory,
       member.model,
+      undefined,
       undefined,
       undefined,
       { runKind: "team", teamId, teamName: nextName },

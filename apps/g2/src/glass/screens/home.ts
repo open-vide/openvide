@@ -18,7 +18,7 @@ const MENU_PATHS: Record<string, string> = {
 export const homeScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> = {
   display: (snap, nav) => {
     const total = snap.sessions.length;
-    const running = snap.sessions.filter(s => s.status === 'running').length;
+    const running = snap.sessions.filter(s => s.status === 'running' || s.status === 'awaiting_approval').length;
     const idle = snap.sessions.filter(s => s.status === 'idle').length;
     const connected = snap.selectedHostId
       ? snap.hostStatuses[snap.selectedHostId] === 'connected'

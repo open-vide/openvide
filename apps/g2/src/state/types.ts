@@ -1,5 +1,7 @@
 // ── Host Types ──
 
+import type { PendingPermissionRequest } from '../types';
+
 export interface Host {
   id: string;
   name: string;
@@ -26,7 +28,7 @@ export interface Workspace {
 
 export type Tool = 'claude' | 'codex' | 'gemini';
 
-export type SessionStatus = 'idle' | 'running' | 'failed' | 'cancelled' | 'interrupted';
+export type SessionStatus = 'idle' | 'running' | 'awaiting_approval' | 'failed' | 'cancelled' | 'interrupted';
 
 export interface SessionSummary {
   id: string;
@@ -44,6 +46,7 @@ export interface SessionSummary {
   title?: string;
   summary?: string;
   messageCount?: number;
+  pendingPermission?: PendingPermissionRequest;
 }
 
 // ── File Browser Types ──
@@ -83,6 +86,7 @@ export interface Settings {
   showToolDetails: boolean;  // default true
   pollInterval: number;      // ms, default 2500
   showHiddenFiles: boolean;  // default false
+  codexPermissionMode: 'auto' | 'ask';
   sttProvider: 'soniox';
   sttApiKey: string;
 }

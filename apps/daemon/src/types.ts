@@ -2,10 +2,16 @@
 
 export type Tool = "claude" | "codex" | "gemini";
 export type SessionExecutionBackend = "cli" | "codex_app_server";
+export type PermissionMode = "auto" | "ask";
+export type PermissionDecision = "approve_once" | "reject" | "abort_run";
+export type PermissionRequestOptionKind = PermissionDecision | "reply";
+export type PermissionRequestKind = "command" | "file_write" | "network" | "dangerous_action" | "generic";
+export type PermissionRequestStatus = "pending" | "approved" | "rejected" | "cancelled" | "expired";
 
 export type SessionStatus =
   | "idle"
   | "running"
+  | "awaiting_approval"
   | "failed"
   | "cancelled"
   | "interrupted";
@@ -34,11 +40,32 @@ export interface FollowUpSuggestion {
   source: "ai" | "heuristic";
 }
 
+export interface PendingPermissionRequest {
+  requestId: string;
+  kind: PermissionRequestKind;
+  status: PermissionRequestStatus;
+  title: string;
+  description?: string;
+  command?: string;
+  files?: string[];
+  reason?: string;
+  risk?: "low" | "medium" | "high";
+  options?: Array<{
+    id: string;
+    label: string;
+    kind: PermissionRequestOptionKind;
+  }>;
+  createdAt: string;
+  source: "codex_app_server";
+  backendMethod: string;
+}
+
 export interface SessionRecord {
   id: string;
   tool: Tool;
   status: SessionStatus;
   executionBackend?: SessionExecutionBackend;
+  permissionMode?: PermissionMode;
   runKind?: "interactive" | "scheduled" | "team";
   scheduleId?: string;
   scheduleName?: string;
@@ -49,6 +76,7 @@ export interface SessionRecord {
   workingDirectory: string;
   model?: string;
   autoAccept?: boolean;
+  pendingPermission?: PendingPermissionRequest;
   createdAt: string;
   updatedAt: string;
   lastTurn?: LastTurn;
@@ -102,6 +130,7 @@ export interface WorkspaceSessionRecord {
   title?: string;
   summary?: string;
   messageCount?: number;
+  pendingPermission?: PendingPermissionRequest;
   lastTurn?: LastTurn;
 }
 

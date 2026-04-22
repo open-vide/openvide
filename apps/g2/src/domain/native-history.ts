@@ -1,5 +1,12 @@
 import type { ChatMessage } from '../types';
-import { THINK_BODY, THINK_HEADER } from './output-parser';
+import {
+  encodeAgentMessageDelta,
+  encodeAgentMessageFinal,
+  parseAgentMessageDelta,
+  parseAgentMessageFinal,
+  THINK_BODY,
+  THINK_HEADER,
+} from './output-parser';
 
 let nativeThinkingCounter = 10_000;
 
@@ -73,6 +80,14 @@ function isCodexBootstrapPrompt(text: string): boolean {
   if (lower.includes('approved command prefixes')) return true;
   if (text.length > 4000 && lower.includes('## skills')) return true;
   return false;
+}
+
+function isCodexControlPrompt(text: string): boolean {
+  return /^<turn_aborted(?:\s|>|$)/.test(text.trim());
+}
+
+function shouldDisplayCodexUserPrompt(text: string): boolean {
+  return !isCodexBootstrapPrompt(text) && !isCodexControlPrompt(text);
 }
 
 function parseNativeClaudeHistory(lines: string[]): string[] {
@@ -161,7 +176,7 @@ function parseNativeCodexHistory(lines: string[]): string[] {
         const text = extractTextFromUnknown(payload.content);
         if (!text) continue;
         if (role === 'user') {
-          if (!isCodexBootstrapPrompt(text)) {
+          if (shouldDisplayCodexUserPrompt(text)) {
             out.push(`§P§${text}`);
           }
           continue;
@@ -209,11 +224,33 @@ function parseNativeCodexHistory(lines: string[]): string[] {
       }
     }
 
-    if (parsed.type === 'item.completed') {
+    if (parsed.type === 'item.completed' || parsed.type === 'item.created') {
       const item = parsed.item as Record<string, unknown> | undefined;
       if (!item) continue;
       if (item.type === 'agent_message' && typeof item.text === 'string') {
-        out.push(...splitIntoLines(item.text));
+        const id = typeof item.id === 'string' ? item.id : 'agent_message';
+        if (parsed.type === 'item.created') {
+          if (item.text) {
+            out.push(encodeAgentMessageDelta(id, item.text));
+          }
+          continue;
+        }
+        if (item.text) {
+          out.push(encodeAgentMessageFinal(id, item.text));
+        }
+        continue;
+      }
+      if (item.type === 'message') {
+        const role = typeof item.role === 'string' ? item.role : '';
+        const text = extractTextFromUnknown(item.content);
+        if (!text) continue;
+        if (role === 'user') {
+          if (shouldDisplayCodexUserPrompt(text)) {
+            out.push(`§P§${text}`);
+          }
+          continue;
+        }
+        out.push(...splitIntoLines(text));
         continue;
       }
       if (item.type === 'reasoning' && typeof item.text === 'string') {
@@ -226,7 +263,7 @@ function parseNativeCodexHistory(lines: string[]): string[] {
         }
         continue;
       }
-      if (item.type === 'tool_call') {
+      if (item.type === 'tool_call' || item.type === 'function_call') {
         const name = typeof item.name === 'string' ? item.name : 'tool';
         out.push(buildToolLine(name, item.arguments));
       }
@@ -257,8 +294,103 @@ export function buildMessagesFromDisplayLines(
   previousMessages: ChatMessage[] = [],
 ): ChatMessage[] {
   const built: ChatMessage[] = [];
+  const agentMessageStateById = new Map<string, {
+    messageIndex: number;
+    startOffset: number;
+    length: number;
+    finalized: boolean;
+  }>();
+  let activeAgentDeltaId: string | null = null;
+  let previousLineWasAgentDelta = false;
+
+  const replaceAgentMessageDelta = (id: string, finalText: string): boolean => {
+    const state = agentMessageStateById.get(id);
+    const target = state ? built[state.messageIndex] : undefined;
+    if (!state || target?.role !== 'assistant') return false;
+
+    const startOffset = Math.min(state.startOffset, target.content.length);
+    const endOffset = Math.min(startOffset + state.length, target.content.length);
+    const before = target.content.slice(0, startOffset);
+    const after = target.content.slice(endOffset);
+    target.content = `${before}${finalText}${after}`;
+
+    const lengthDelta = finalText.length - state.length;
+    state.length = finalText.length;
+    state.finalized = true;
+    for (const other of agentMessageStateById.values()) {
+      if (other === state || other.messageIndex !== state.messageIndex) continue;
+      if (other.startOffset > state.startOffset) {
+        other.startOffset += lengthDelta;
+      }
+    }
+    target.isStreaming = Array.from(agentMessageStateById.values())
+      .some((other) => other.messageIndex === state.messageIndex && !other.finalized);
+    return true;
+  };
 
   for (const line of displayLines) {
+    const agentDelta = parseAgentMessageDelta(line);
+    if (agentDelta) {
+      const continuesCurrentMessage = previousLineWasAgentDelta && activeAgentDeltaId === agentDelta.id;
+      const text = continuesCurrentMessage ? agentDelta.text : agentDelta.text.trimStart();
+      if (!text) continue;
+
+      let state = agentMessageStateById.get(agentDelta.id);
+      let target = state ? built[state.messageIndex] : built[built.length - 1];
+      if (state && target?.role !== 'assistant') {
+        agentMessageStateById.delete(agentDelta.id);
+        state = undefined;
+        target = built[built.length - 1];
+      }
+      if (!target || target.role !== 'assistant') {
+        target = { role: 'assistant', content: '', timestamp: Date.now(), isStreaming: true };
+        built.push(target);
+      }
+
+      if (!state) {
+        if (!continuesCurrentMessage && target.content) {
+          target.content += '\n';
+        }
+        state = {
+          messageIndex: built.length - 1,
+          startOffset: target.content.length,
+          length: 0,
+          finalized: false,
+        };
+        agentMessageStateById.set(agentDelta.id, state);
+      }
+      target.content += text;
+      target.isStreaming = true;
+      state.length += text.length;
+      state.finalized = false;
+
+      activeAgentDeltaId = agentDelta.id;
+      previousLineWasAgentDelta = true;
+      continue;
+    }
+
+    const agentFinal = parseAgentMessageFinal(line);
+    if (agentFinal) {
+      const text = agentFinal.text.trim();
+      if (!text) continue;
+
+      if (!replaceAgentMessageDelta(agentFinal.id, text)) {
+        const last = built[built.length - 1];
+        if (last && last.role === 'assistant') {
+          last.content += `${last.content ? '\n' : ''}${text}`;
+        } else {
+          built.push({ role: 'assistant', content: text, timestamp: Date.now() });
+        }
+      }
+
+      activeAgentDeltaId = null;
+      previousLineWasAgentDelta = false;
+      continue;
+    }
+
+    activeAgentDeltaId = null;
+    previousLineWasAgentDelta = false;
+
     if (line.startsWith('§P§')) {
       built.push({ role: 'user', content: line.slice(3), timestamp: Date.now() });
       continue;

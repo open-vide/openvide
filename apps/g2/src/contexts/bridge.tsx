@@ -20,11 +20,51 @@ interface BridgeContextValue {
 }
 
 const BridgeContext = createContext<BridgeContextValue | null>(null);
+const DEV_BOOTSTRAP_HOST_ID = 'dev-bootstrap-host';
 
 export function useBridge() {
   const ctx = useContext(BridgeContext);
   if (!ctx) throw new Error('useBridge must be used within BridgeProvider');
   return ctx;
+}
+
+function getDevBootstrapHost(): WebHost | null {
+  if (!import.meta.env.DEV) return null;
+
+  const url = import.meta.env.VITE_OPENVIDE_DEV_HOST_URL?.trim().replace(/\/$/, '');
+  if (!url) return null;
+
+  const name = import.meta.env.VITE_OPENVIDE_DEV_HOST_NAME?.trim() || 'Dev Bridge';
+  const token = import.meta.env.VITE_OPENVIDE_DEV_HOST_TOKEN?.trim();
+  return {
+    id: DEV_BOOTSTRAP_HOST_ID,
+    name,
+    url,
+    ...(token ? { token } : {}),
+  };
+}
+
+function mergeDevBootstrapHost(hosts: WebHost[], bootstrap: WebHost | null): { hosts: WebHost[]; host: WebHost | null; changed: boolean; added: boolean } {
+  if (!bootstrap) return { hosts, host: null, changed: false, added: false };
+
+  const existingIndex = hosts.findIndex((host) => host.id === bootstrap.id || host.url.replace(/\/$/, '') === bootstrap.url);
+  if (existingIndex < 0) {
+    return { hosts: [...hosts, bootstrap], host: bootstrap, changed: true, added: true };
+  }
+
+  const existing = hosts[existingIndex]!;
+  const merged: WebHost = {
+    ...existing,
+    name: bootstrap.name,
+    url: bootstrap.url,
+    ...(bootstrap.token ? { token: bootstrap.token } : {}),
+  };
+  const changed = JSON.stringify(existing) !== JSON.stringify(merged);
+  if (!changed) return { hosts, host: existing, changed: false, added: false };
+
+  const next = [...hosts];
+  next[existingIndex] = merged;
+  return { hosts: next, host: merged, changed: true, added: false };
 }
 
 export function BridgeProvider({ children }: { children: ReactNode }) {
@@ -91,8 +131,20 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     void (async () => {
       const loaded = await loadHosts() as WebHost[];
+      const storedActiveHostId = await storageGetRaw(ACTIVE_HOST_KEY).catch(() => null);
+      const bootstrap = getDevBootstrapHost();
+      const merged = mergeDevBootstrapHost(loaded, bootstrap);
       if (cancelled) return;
-      setHosts(loaded);
+      setHosts(merged.hosts);
+      if (merged.changed) void persistHosts(merged.hosts);
+      const shouldActivateBootstrap = !!merged.host && (!storedActiveHostId || storedActiveHostId === merged.host.id);
+      if (merged.host && shouldActivateBootstrap) {
+        setActiveHostId(merged.host.id);
+        void storageSetRaw(ACTIVE_HOST_KEY, merged.host.id);
+        setBridgeUrl(merged.host.url);
+        setBridgeAuth({ ...merged.host, hostId: merged.host.id });
+        connect('', '');
+      }
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       queryClient.invalidateQueries({ queryKey: ['hosts-health'] });
     })();
@@ -178,7 +230,7 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
 
   // Update host statuses from polling (called by useSessions hook)
   const updateHostStatuses = useCallback((statuses: Record<string, 'connected' | 'disconnected'>) => {
-    setHostStatuses(statuses);
+    setHostStatuses((current) => (sameHostStatuses(current, statuses) ? current : statuses));
   }, []);
 
   return (
@@ -205,6 +257,16 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
 
 // Separate context for updates to avoid re-renders
 const BridgeUpdateContext = createContext<(statuses: Record<string, 'connected' | 'disconnected'>) => void>(() => {});
+
+function sameHostStatuses(
+  left: Record<string, 'connected' | 'disconnected'>,
+  right: Record<string, 'connected' | 'disconnected'>,
+): boolean {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => left[key] === right[key]);
+}
 
 export function useBridgeUpdate() {
   return useContext(BridgeUpdateContext);

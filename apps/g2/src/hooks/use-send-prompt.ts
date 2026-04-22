@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { rpc } from '@/domain/daemon-client';
 import { useBridge } from '../contexts/bridge';
-import type { WebSession } from '../types';
+import type { PermissionDecision, WebSession } from '../types';
 
 export function useSendPrompt(sessions?: WebSession[]) {
   const { ensureBridgeForSession } = useBridge();
@@ -28,6 +28,33 @@ export function useCancelSession(sessions?: WebSession[]) {
       const res = await rpc('session.cancel', { id: sessionId });
       if (!res.ok) throw new Error(res.error ?? 'Failed to cancel');
       return true;
+    },
+  });
+}
+
+export function useRespondToPermission(sessions?: WebSession[]) {
+  const { ensureBridgeForSession } = useBridge();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      sessionId,
+      requestId,
+      decision,
+    }: {
+      sessionId: string;
+      requestId: string;
+      decision: PermissionDecision;
+    }) => {
+      if (sessions) ensureBridgeForSession(sessionId, sessions);
+      const res = await rpc('session.permission.respond', { id: sessionId, requestId, decision });
+      if (!res.ok) throw new Error(res.error ?? 'Failed to respond to permission request');
+      return true;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      void queryClient.invalidateQueries({ queryKey: ['workspace-sessions'] });
+      void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
     },
   });
 }
@@ -72,6 +99,7 @@ export function useWorkspaceSessions() {
           title: s.title,
           summary: s.summary,
           messageCount: s.messageCount,
+          pendingPermission: s.pendingPermission,
         }));
       }
       return [];

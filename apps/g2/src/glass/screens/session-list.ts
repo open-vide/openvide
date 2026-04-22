@@ -4,6 +4,7 @@ import { buildScrollableList } from 'even-toolkit/glass-display-builders';
 import { truncate } from 'even-toolkit/text-utils';
 import { fieldJoin, DRILL } from 'even-toolkit/glass-format';
 import type { OpenVideSnapshot, OpenVideActions } from '../types';
+import { t as translate } from '../../utils/i18n';
 
 type SessionListItem =
   | { kind: 'create'; cwd: string }
@@ -37,8 +38,9 @@ export const sessionListScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> =
     const items = getSessionItems(snap);
 
     const count = filtered.length;
-    const running = filtered.filter(s => s.status === 'running').length;
+    const running = filtered.filter(s => s.status === 'running' || s.status === 'awaiting_approval').length;
     const idle = filtered.filter(s => s.status === 'idle').length;
+    const lang = snap.settings.language;
 
     // Show workspace name in header if filtered
     const wsName = snap.selectedWorkspace?.split('/').pop();
@@ -60,7 +62,11 @@ export const sessionListScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> =
         }
         const s = item;
         const tool = s.tool.slice(0, 6);
-        const st = s.status === 'running' ? 'run' : s.status.slice(0, 4);
+        const st = s.status === 'running'
+          ? translate('session.statusRun', lang)
+          : s.status === 'awaiting_approval'
+            ? translate('session.statusApproval', lang)
+            : s.status.slice(0, 4);
         const dir = s.workingDirectory.split('/').pop() ?? '';
         const model = s.model ? truncate(s.model, 8) : '';
         return `${fieldJoin(tool, st, truncate(dir, 18), model)} ${DRILL}`;
@@ -86,14 +92,18 @@ export const sessionListScreen: GlassScreen<OpenVideSnapshot, OpenVideActions> =
         if (selected.origin === 'native' && selected.resumeId) {
           const hostId = selected.hostId ?? snap.selectedWorkspaceHostId ?? snap.selectedHostId ?? snap.hosts[0]?.id;
           void (async () => {
-            const createRes = await ctx.rpc('session.create', {
+            const params: Record<string, unknown> = {
               hostId,
               tool: selected.tool,
               cwd: selected.workingDirectory,
               model: selected.model,
               conversationId: selected.resumeId,
               autoAccept: true,
-            });
+            };
+            if (selected.tool === 'codex' && snap.settings.codexPermissionMode === 'ask') {
+              params.permissionMode = 'ask';
+            }
+            const createRes = await ctx.rpc('session.create', params);
             const sessionId = typeof createRes?.session?.id === 'string' ? createRes.session.id : null;
             if (sessionId) {
               ctx.navigate(`/chat?id=${encodeURIComponent(sessionId)}`);

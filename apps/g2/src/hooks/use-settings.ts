@@ -21,6 +21,7 @@ export const defaultSettings: WebSettings = {
   showToolDetails: true,
   pollInterval: 2500,
   showHiddenFiles: false,
+  codexPermissionMode: 'auto',
   sttProvider: 'soniox',
   sttApiKey: '',
   sttApiKeySoniox: '',
@@ -29,6 +30,7 @@ export const defaultSettings: WebSettings = {
 };
 
 const VALID_STT_PROVIDERS: WebSettings['sttProvider'][] = ['soniox', 'whisper-api', 'deepgram'];
+const VALID_CODEX_PERMISSION_MODES: WebSettings['codexPermissionMode'][] = ['auto', 'ask'];
 
 function normalizeSttProvider(provider?: string | null): WebSettings['sttProvider'] {
   if (provider && VALID_STT_PROVIDERS.includes(provider as WebSettings['sttProvider'])) {
@@ -41,6 +43,9 @@ export function normalizeSettings(settings?: Partial<WebSettings> | null): WebSe
   const merged = { ...defaultSettings, ...(settings ?? {}) };
   return {
     ...merged,
+    codexPermissionMode: VALID_CODEX_PERMISSION_MODES.includes(merged.codexPermissionMode)
+      ? merged.codexPermissionMode
+      : 'auto',
     sttProvider: normalizeSttProvider(settings?.sttProvider ?? merged.sttProvider),
   };
 }

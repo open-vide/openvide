@@ -13,6 +13,22 @@ export const APP_LANGUAGES: { id: AppLanguage; name: string }[] = [
   { id: 'ru', name: '\u0420\u0443\u0441\u0441\u043a\u0438\u0439' },
 ]
 
+function tr(en: string, overrides: Partial<Record<AppLanguage, string>> = {}): Record<AppLanguage, string> {
+  return {
+    en,
+    it: en,
+    es: en,
+    fr: en,
+    de: en,
+    pt: en,
+    ja: en,
+    zh: en,
+    ko: en,
+    ru: en,
+    ...overrides,
+  }
+}
+
 const translations: Record<string, Record<AppLanguage, string>> = {
   // App
   'app.title': { en: 'OPEN VIDE', it: 'OPEN VIDE', es: 'OPEN VIDE', fr: 'OPEN VIDE', de: 'OPEN VIDE', pt: 'OPEN VIDE', ja: 'OPEN VIDE', zh: 'OPEN VIDE', ko: 'OPEN VIDE', ru: 'OPEN VIDE' },
@@ -64,9 +80,11 @@ const translations: Record<string, Record<AppLanguage, string>> = {
   'session.statusCanc': { en: 'canc', it: 'ann', es: 'canc', fr: 'ann', de: 'abb', pt: 'canc', ja: '\u53d6\u6d88', zh: '\u53d6\u6d88', ko: '\ucde8\uc18c', ru: '\u043e\u0442\u043c' },
   'session.statusInt': { en: 'int!', it: 'int!', es: 'int!', fr: 'int!', de: 'unt!', pt: 'int!', ja: '\u4e2d\u65ad!', zh: '\u4e2d\u65ad!', ko: '\uc911\ub2e8!', ru: '\u043f\u0440\u0435\u0440!' },
   'session.statusIdle': { en: 'idle', it: 'fermo', es: 'inact', fr: 'inact', de: 'ruhe', pt: 'inativo', ja: '\u5f85\u6a5f', zh: '\u7a7a\u95f2', ko: '\ub300\uae30', ru: '\u043f\u0440\u043e\u0441\u0442' },
+  'session.statusApproval': tr('appr', { de: 'frei' }),
 
   // Session detail status badges
   'session.running': { en: '[RUNNING]', it: '[IN ESECUZIONE]', es: '[EJECUTANDO]', fr: '[EN COURS]', de: '[LAUFT]', pt: '[EXECUTANDO]', ja: '[\u5b9f\u884c\u4e2d]', zh: '[\u8fd0\u884c\u4e2d]', ko: '[\uc2e4\ud589 \uc911]', ru: '[\u0420\u0410\u0411\u041e\u0422\u0410\u0415\u0422]' },
+  'session.awaitingApproval': tr('[AWAITING APPROVAL]', { de: '[FREIGABE]' }),
   'session.failed': { en: '[FAILED]', it: '[ERRORE]', es: '[FALLIDO]', fr: '[ECHOUE]', de: '[FEHLER]', pt: '[FALHOU]', ja: '[\u5931\u6557]', zh: '[\u5931\u8d25]', ko: '[\uc2e4\ud328]', ru: '[\u041e\u0428\u0418\u0411\u041a\u0410]' },
   'session.cancelled': { en: '[CANCELLED]', it: '[ANNULLATO]', es: '[CANCELADO]', fr: '[ANNULE]', de: '[ABGEBROCHEN]', pt: '[CANCELADO]', ja: '[\u30ad\u30e3\u30f3\u30bb\u30eb]', zh: '[\u5df2\u53d6\u6d88]', ko: '[\ucde8\uc18c\ub428]', ru: '[\u041e\u0422\u041c\u0415\u041d\u0415\u041d\u041e]' },
   'session.interrupted': { en: '[INTERRUPTED]', it: '[INTERROTTO]', es: '[INTERRUMPIDO]', fr: '[INTERROMPU]', de: '[UNTERBROCHEN]', pt: '[INTERROMPIDO]', ja: '[\u4e2d\u65ad]', zh: '[\u5df2\u4e2d\u65ad]', ko: '[\uc911\ub2e8\ub428]', ru: '[\u041f\u0420\u0415\u0420\u0412\u0410\u041d\u041e]' },
@@ -81,6 +99,7 @@ const translations: Record<string, Record<AppLanguage, string>> = {
   // Live output
   'output.listening': { en: '[LISTENING...]', it: '[ASCOLTO...]', es: '[ESCUCHANDO...]', fr: '[ECOUTE...]', de: '[HORE ZU...]', pt: '[OUVINDO...]', ja: '[\u8074\u53d6\u4e2d...]', zh: '[\u6b63\u5728\u542c...]', ko: '[\ub4e3\ub294 \uc911...]', ru: '[\u0421\u041b\u0423\u0428\u0410\u042e...]' },
   'output.live': { en: '[LIVE]', it: '[LIVE]', es: '[EN VIVO]', fr: '[EN DIRECT]', de: '[LIVE]', pt: '[AO VIVO]', ja: '[\u30e9\u30a4\u30d6]', zh: '[\u5b9e\u65f6]', ko: '[\ub77c\uc774\ube0c]', ru: '[\u0416\u0418\u0412\u041e]' },
+  'output.approval': tr('[APPROVAL]', { de: '[FREIGABE]' }),
   'output.done': { en: '[DONE]', it: '[FATTO]', es: '[HECHO]', fr: '[TERMINE]', de: '[FERTIG]', pt: '[CONCLUIDO]', ja: '[\u5b8c\u4e86]', zh: '[\u5b8c\u6210]', ko: '[\uc644\ub8cc]', ru: '[\u0413\u041e\u0422\u041e\u0412\u041e]' },
   'output.waiting': { en: 'Waiting for output...', it: 'In attesa...', es: 'Esperando salida...', fr: 'En attente...', de: 'Warte auf Ausgabe...', pt: 'Aguardando saida...', ja: '\u51fa\u529b\u5f85\u3061...', zh: '\u7b49\u5f85\u8f93\u51fa...', ko: '\ucd9c\ub825 \ub300\uae30 \uc911...', ru: '\u041e\u0436\u0438\u0434\u0430\u043d\u0438\u0435 \u0432\u044b\u0432\u043e\u0434\u0430...' },
   'output.waitingInput': { en: 'Waiting for input...', it: 'In attesa di input...', es: 'Esperando entrada...', fr: 'En attente d\'entree...', de: 'Warte auf Eingabe...', pt: 'Aguardando entrada...', ja: '\u5165\u529b\u5f85\u3061...', zh: '\u7b49\u5f85\u8f93\u5165...', ko: '\uc785\ub825 \ub300\uae30 \uc911...', ru: '\u041e\u0436\u0438\u0434\u0430\u043d\u0438\u0435 \u0432\u0432\u043e\u0434\u0430...' },
@@ -108,6 +127,9 @@ const translations: Record<string, Record<AppLanguage, string>> = {
   'settings.title': { en: 'SETTINGS', it: 'IMPOSTAZIONI', es: 'AJUSTES', fr: 'PARAMETRES', de: 'EINSTELLUNGEN', pt: 'CONFIGURACOES', ja: '\u8a2d\u5b9a', zh: '\u8bbe\u7f6e', ko: '\uc124\uc815', ru: '\u041d\u0410\u0421\u0422\u0420\u041e\u0419\u041a\u0418' },
   'settings.language': { en: 'Language', it: 'Lingua', es: 'Idioma', fr: 'Langue', de: 'Sprache', pt: 'Idioma', ja: '\u8a00\u8a9e', zh: '\u8bed\u8a00', ko: '\uc5b8\uc5b4', ru: '\u042f\u0437\u044b\u043a' },
   'settings.voice': { en: 'Voice', it: 'Voce', es: 'Voz', fr: 'Voix', de: 'Stimme', pt: 'Voz', ja: '\u97f3\u58f0', zh: '\u8bed\u97f3', ko: '\uc74c\uc131', ru: '\u0413\u043e\u043b\u043e\u0441' },
+  'settings.codexPermissions': tr('Codex permissions', { de: 'Codex-Freigaben' }),
+  'settings.auto': tr('Auto', { de: 'Auto' }),
+  'settings.ask': tr('Ask', { de: 'Nachfragen' }),
   'settings.toolDetails': { en: 'Tool Details', it: 'Dettagli Tool', es: 'Detalles Herram.', fr: 'Details Outils', de: 'Tool-Details', pt: 'Detalhes Ferram.', ja: '\u30c4\u30fc\u30eb\u8a73\u7d30', zh: '\u5de5\u5177\u8be6\u60c5', ko: '\ub3c4\uad6c \uc0c1\uc138', ru: '\u0414\u0435\u0442\u0430\u043b\u0438 \u0438\u043d\u0441\u0442\u0440.' },
   'settings.on': { en: 'ON', it: 'ON', es: 'ON', fr: 'ON', de: 'AN', pt: 'ON', ja: 'ON', zh: '\u5f00', ko: 'ON', ru: '\u0412\u041a\u041b' },
   'settings.off': { en: 'OFF', it: 'OFF', es: 'OFF', fr: 'OFF', de: 'AUS', pt: 'OFF', ja: 'OFF', zh: '\u5173', ko: 'OFF', ru: '\u0412\u042b\u041a\u041b' },
@@ -167,6 +189,7 @@ const translations: Record<string, Record<AppLanguage, string>> = {
   'web.noSessions': { en: 'No sessions', it: 'Nessuna sessione', es: 'No hay sesiones', fr: 'Aucune session', de: 'Keine Sitzungen', pt: 'Nenhuma sessao', ja: '\u30bb\u30c3\u30b7\u30e7\u30f3\u306a\u3057', zh: '\u65e0\u4f1a\u8bdd', ko: '\uc138\uc158 \uc5c6\uc74c', ru: '\u041d\u0435\u0442 \u0441\u0435\u0441\u0441\u0438\u0439' },
   'web.noSessionsHint': { en: 'Click "New Session" to get started.', it: 'Clicca "Nuova Sessione" per iniziare.', es: 'Haz clic en "Nueva Sesion" para empezar.', fr: 'Cliquez sur "Nouvelle Session" pour commencer.', de: 'Klicke "Neue Sitzung" um zu starten.', pt: 'Clique em "Nova Sessao" para comecar.', ja: '"\u65b0\u898f\u30bb\u30c3\u30b7\u30e7\u30f3"\u3092\u30af\u30ea\u30c3\u30af\u3057\u3066\u958b\u59cb', zh: '\u70b9\u51fb"\u65b0\u5efa\u4f1a\u8bdd"\u5f00\u59cb', ko: '"\uc0c8 \uc138\uc158"\uc744 \ud074\ub9ad\ud558\uc5ec \uc2dc\uc791', ru: '\u041d\u0430\u0436\u043c\u0438\u0442\u0435 "\u041d\u043e\u0432\u0430\u044f \u0441\u0435\u0441\u0441\u0438\u044f" \u0434\u043b\u044f \u043d\u0430\u0447\u0430\u043b\u0430' },
   'web.chat': { en: 'Chat', it: 'Chat', es: 'Chat', fr: 'Chat', de: 'Chat', pt: 'Chat', ja: '\u30c1\u30e3\u30c3\u30c8', zh: '\u804a\u5929', ko: '\ucc44\ud305', ru: '\u0427\u0430\u0442' },
+  'chat.lastPromptUnavailable': { en: 'Last prompt unavailable', it: 'Ultimo prompt non disponibile', es: 'Ultimo prompt no disponible', fr: 'Dernier prompt indisponible', de: 'Letzter Prompt nicht verfuegbar', pt: 'Ultimo prompt indisponivel', ja: '\u6700\u5f8c\u306e\u30d7\u30ed\u30f3\u30d7\u30c8\u306f\u5229\u7528\u3067\u304d\u307e\u305b\u3093', zh: '\u6700\u540e\u63d0\u793a\u4e0d\u53ef\u7528', ko: '\ub9c8\uc9c0\ub9c9 \ud504\ub86c\ud504\ud2b8\ub97c \uc0ac\uc6a9\ud560 \uc218 \uc5c6\uc74c', ru: '\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0439 \u043f\u0440\u043e\u043c\u043f\u0442 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d' },
   'web.teamChat': { en: 'Team Chat', it: 'Chat Team', es: 'Chat de Equipo', fr: 'Chat Equipe', de: 'Team-Chat', pt: 'Chat da Equipe', ja: '\u30c1\u30fc\u30e0\u30c1\u30e3\u30c3\u30c8', zh: '\u56e2\u961f\u804a\u5929', ko: '\ud300 \ucc44\ud305', ru: '\u0427\u0430\u0442 \u043a\u043e\u043c\u0430\u043d\u0434\u044b' },
   'web.teams': { en: 'Teams', it: 'Team', es: 'Equipos', fr: 'Equipes', de: 'Teams', pt: 'Equipes', ja: '\u30c1\u30fc\u30e0', zh: '\u56e2\u961f', ko: '\ud300', ru: '\u041a\u043e\u043c\u0430\u043d\u0434\u044b' },
   'web.team': { en: 'Team', it: 'Team', es: 'Equipo', fr: 'Equipe', de: 'Team', pt: 'Equipe', ja: '\u30c1\u30fc\u30e0', zh: '\u56e2\u961f', ko: '\ud300', ru: '\u041a\u043e\u043c\u0430\u043d\u0434\u0430' },
@@ -191,7 +214,27 @@ const translations: Record<string, Record<AppLanguage, string>> = {
   'web.cancelSession': { en: 'Cancel Session', it: 'Annulla Sessione', es: 'Cancelar Sesion', fr: 'Annuler Session', de: 'Sitzung abbrechen', pt: 'Cancelar Sessao', ja: '\u30bb\u30c3\u30b7\u30e7\u30f3\u3092\u30ad\u30e3\u30f3\u30bb\u30eb', zh: '\u53d6\u6d88\u4f1a\u8bdd', ko: '\uc138\uc158 \ucde8\uc18c', ru: '\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0441\u0435\u0441\u0441\u0438\u044e' },
   'web.usePrompt': { en: 'Use Prompt', it: 'Usa Prompt', es: 'Usar Prompt', fr: 'Utiliser Prompt', de: 'Prompt verwenden', pt: 'Usar Prompt', ja: '\u30d7\u30ed\u30f3\u30d7\u30c8\u3092\u4f7f\u7528', zh: '\u4f7f\u7528\u63d0\u793a', ko: '\ud504\ub86c\ud504\ud2b8 \uc0ac\uc6a9', ru: '\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c \u043f\u0440\u043e\u043c\u043f\u0442' },
   'web.sendMessage': { en: 'Send a message...', it: 'Invia un messaggio...', es: 'Envia un mensaje...', fr: 'Envoyer un message...', de: 'Nachricht senden...', pt: 'Enviar uma mensagem...', ja: '\u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u9001\u4fe1...', zh: '\u53d1\u9001\u6d88\u606f...', ko: '\uba54\uc2dc\uc9c0 \ubcf4\ub0b4\uae30...', ru: '\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435...' },
+  'web.awaitingApproval': tr('Codex is waiting for approval', { de: 'Codex wartet auf Freigabe' }),
+  'web.resolvePermissionToContinue': tr('Resolve the permission request to continue...', { de: 'Freigabeanfrage beantworten, um fortzufahren...' }),
+  'web.statusApproval': tr('approval', { de: 'Freigabe' }),
   'web.noModels': { en: 'No models available', it: 'Nessun modello disponibile', es: 'No hay modelos disponibles', fr: 'Aucun modele disponible', de: 'Keine Modelle verfugbar', pt: 'Nenhum modelo disponivel', ja: '\u30e2\u30c7\u30eb\u306a\u3057', zh: '\u65e0\u53ef\u7528\u6a21\u578b', ko: '\ubaa8\ub378 \uc5c6\uc74c', ru: '\u041d\u0435\u0442 \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\u0445 \u043c\u043e\u0434\u0435\u043b\u0435\u0439' },
+
+  // Permission approval
+  'permission.approvalNeeded': tr('Approval needed', { de: 'Freigabe erforderlich' }),
+  'permission.approve': tr('Approve', { de: 'Freigeben' }),
+  'permission.approveOnce': tr('Approve once', { de: 'Einmal freigeben' }),
+  'permission.reject': tr('Reject', { de: 'Ablehnen' }),
+  'permission.abortRun': tr('Abort run', { de: 'Lauf abbrechen' }),
+  'permission.read': tr('Read', { de: 'Lesen' }),
+  'permission.fileAccess': tr('File access', { de: 'Dateizugriff' }),
+  'permission.network': tr('Network', { de: 'Netzwerk' }),
+  'permission.highRisk': tr('High risk', { de: 'Hohes Risiko' }),
+  'permission.command': tr('Command', { de: 'Befehl' }),
+  'permission.generic': tr('Permission', { de: 'Freigabe' }),
+  'permission.files': tr('Files', { de: 'Dateien' }),
+  'permission.risk.low': tr('low risk', { de: 'niedriges Risiko' }),
+  'permission.risk.medium': tr('medium risk', { de: 'mittleres Risiko' }),
+  'permission.risk.high': tr('high risk', { de: 'hohes Risiko' }),
 
   // Web UI - Prompts
   'web.prompts': { en: 'Prompts', it: 'Prompt', es: 'Prompts', fr: 'Prompts', de: 'Prompts', pt: 'Prompts', ja: '\u30d7\u30ed\u30f3\u30d7\u30c8', zh: '\u63d0\u793a', ko: '\ud504\ub86c\ud504\ud2b8', ru: '\u041f\u0440\u043e\u043c\u043f\u0442\u044b' },
