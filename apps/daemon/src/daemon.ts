@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as child_process from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { daemonDir, log, logError } from "./utils.js";
 import { startServer, cleanupSocket } from "./ipc.js";
 import { tryCacheClaudeAuth } from "./authCache.js";
@@ -201,7 +202,7 @@ function spawnDaemon(): void {
   const logFd = fs.openSync(logPath(), "a");
 
   // Self-daemonize: re-spawn this script with --daemon-main flag
-  const modulePath = new URL(import.meta.url).pathname;
+  const modulePath = fileURLToPath(import.meta.url);
   const child = child_process.spawn(
     process.execPath,
     [modulePath, "--daemon-main"],

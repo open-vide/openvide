@@ -17,8 +17,14 @@ import * as tm from "./teamManager.js";
 import * as sched from "./scheduleManager.js";
 
 const SOCKET_NAME = "daemon.sock";
+const WIN_PIPE_NAME = "openvide-daemon";
+const isWindows = process.platform === "win32";
 
 function socketPath(): string {
+  if (isWindows) {
+    // Windows requires named pipe path; not a filesystem entry.
+    return `\\\\.\\pipe\\${WIN_PIPE_NAME}`;
+  }
   return path.join(daemonDir(), SOCKET_NAME);
 }
 
@@ -27,11 +33,13 @@ function socketPath(): string {
 export function startServer(): net.Server {
   const sockPath = socketPath();
 
-  // Clean up stale socket
-  try {
-    fs.unlinkSync(sockPath);
-  } catch {
-    // doesn't exist
+  // Clean up stale socket (Unix only — named pipes are not filesystem entries)
+  if (!isWindows) {
+    try {
+      fs.unlinkSync(sockPath);
+    } catch {
+      // doesn't exist
+    }
   }
 
   const server = net.createServer((conn) => {
@@ -994,6 +1002,7 @@ export function sendCommand(req: IpcRequest, timeoutMs = 30000): Promise<IpcResp
 }
 
 export function cleanupSocket(): void {
+  if (isWindows) return; // named pipe — no filesystem entry to unlink
   try {
     fs.unlinkSync(socketPath());
   } catch {
