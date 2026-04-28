@@ -12,6 +12,24 @@ npm install -g @openvide/daemon
 
 Requires Node.js 18+ and at least one AI CLI tool installed.
 
+### Platform notes
+
+**Windows 10/11.** The daemon runs natively on Windows. IPC uses a named pipe (`\\.\pipe\openvide-daemon`) in place of a Unix domain socket. State and logs live at `%USERPROFILE%\.openvide-daemon\`. Install and use the daemon the same way as on macOS/Linux:
+
+```powershell
+npm install -g @openvide/daemon
+openvide-daemon health
+```
+
+The mobile app's SSH transport currently assumes a bash-compatible remote shell, so to drive a Windows daemon from the OpenVide mobile app you also need to point Windows OpenSSH at bash (e.g. Git Bash). Until that assumption is removed app-side, set:
+
+```powershell
+# As Administrator
+New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -Value "C:\Program Files\Git\bin\bash.exe" -PropertyType String -Force
+New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShellCommandOption -Value "-c" -PropertyType String -Force
+Restart-Service sshd
+```
+
 ## Quick Start
 
 ```bash
