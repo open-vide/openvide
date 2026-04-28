@@ -456,7 +456,7 @@ export function HostDetailScreen({ route, navigation }: Props): JSX.Element {
         <View className="flex-row gap-3">
           <Pressable
             className="flex-1 bg-card border border-border rounded-2xl p-3.5 items-center active:opacity-80"
-            onPress={() => navigation.navigate("FileBrowser", { targetId })}
+            onPress={() => navigation.navigate("FileBrowser", { targetId, initialPath: target.defaultBrowsePath })}
           >
             <Text className="text-accent font-semibold text-sm">Browse Files</Text>
           </Pressable>

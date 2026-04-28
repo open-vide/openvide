@@ -49,6 +49,7 @@ export interface TargetProfile {
   daemonCompatible?: boolean;
   daemonRequiredVersion?: string;
   daemonCompatibilityReason?: string;
+  defaultBrowsePath?: string;
   createdAt: string;
   updatedAt: string;
 }
