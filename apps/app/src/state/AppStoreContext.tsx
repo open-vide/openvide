@@ -211,7 +211,7 @@ interface AppStoreContextShape {
   }) => Promise<TargetProfile>;
   updateTarget: (
     targetId: string,
-    updates: Partial<Pick<TargetProfile, "label" | "host" | "port" | "username" | "tags">>,
+    updates: Partial<Pick<TargetProfile, "label" | "host" | "port" | "username" | "tags" | "defaultBrowsePath">>,
   ) => Promise<void>;
   deleteTarget: (targetId: string) => Promise<void>;
   getTarget: (targetId: string) => TargetProfile | undefined;
@@ -632,7 +632,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): J
 
   const updateTarget = useCallback(async (
     targetId: string,
-    updates: Partial<Pick<TargetProfile, "label" | "host" | "port" | "username" | "tags">>,
+    updates: Partial<Pick<TargetProfile, "label" | "host" | "port" | "username" | "tags" | "defaultBrowsePath">>,
   ): Promise<void> => {
     commit((prev) => ({
       ...prev,

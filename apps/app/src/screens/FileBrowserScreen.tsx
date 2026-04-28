@@ -18,7 +18,7 @@ export function FileBrowserScreen(): JSX.Element {
   const route = useRoute<RouteProp<FileBrowserParams, "FileBrowser">>();
   const navigation = useNavigation<any>();
   const { targetId, initialPath } = route.params;
-  const { getTarget } = useAppStore();
+  const { getTarget, updateTarget } = useAppStore();
   const { accent, mutedForeground } = useThemeColors();
   const target = getTarget(targetId);
 
@@ -231,11 +231,33 @@ export function FileBrowserScreen(): JSX.Element {
     });
   }, [currentPath, loadEntries]);
 
-  const menuItems = useMemo((): PopoverMenuItem[] => [
-    { label: "Search", icon: "search", onPress: toggleSearch },
-    { label: "New File", icon: "file-plus", onPress: promptCreateFile },
-    { label: "New Folder", icon: "folder-plus", onPress: promptCreateDirectory },
-  ], [toggleSearch, promptCreateFile, promptCreateDirectory]);
+  const setAsDefault = useCallback(async () => {
+    if (!currentPath) return;
+    await updateTarget(targetId, { defaultBrowsePath: currentPath });
+    Alert.alert("Default folder set", currentPath);
+  }, [currentPath, targetId, updateTarget]);
+
+  const clearDefault = useCallback(async () => {
+    await updateTarget(targetId, { defaultBrowsePath: undefined });
+    Alert.alert("Default folder cleared", "Browse will start at home folder.");
+  }, [targetId, updateTarget]);
+
+  const menuItems = useMemo((): PopoverMenuItem[] => {
+    const isDefault = !!currentPath && target?.defaultBrowsePath === currentPath;
+    const hasDefault = !!target?.defaultBrowsePath;
+    const items: PopoverMenuItem[] = [
+      { label: "Search", icon: "search", onPress: toggleSearch },
+      { label: "New File", icon: "file-plus", onPress: promptCreateFile },
+      { label: "New Folder", icon: "folder-plus", onPress: promptCreateDirectory },
+    ];
+    if (currentPath && !isDefault) {
+      items.push({ label: "Set as default folder", icon: "bookmark", onPress: setAsDefault });
+    }
+    if (hasDefault) {
+      items.push({ label: "Clear default folder", icon: "bookmark", onPress: clearDefault });
+    }
+    return items;
+  }, [toggleSearch, promptCreateFile, promptCreateDirectory, setAsDefault, clearDefault, currentPath, target?.defaultBrowsePath]);
 
   useEffect(() => {
     navigation.setOptions({
