@@ -14,6 +14,9 @@ export function escapeShellArg(arg: string): string {
 }
 
 export function daemonDir(): string {
+  if (process.env.OPENVIDE_DAEMON_HOME?.trim()) {
+    return process.env.OPENVIDE_DAEMON_HOME.trim();
+  }
   return path.join(os.homedir(), ".openvide-daemon");
 }
 

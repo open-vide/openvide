@@ -54,6 +54,28 @@ Usage:
   openvide-daemon prompt list
   openvide-daemon prompt add --label <label> --prompt <text>
   openvide-daemon prompt remove --id <id>
+  openvide-daemon project list
+  openvide-daemon project add --name <name> --path <path> [--github owner/repo] [--priority high|medium|low] [--type product]
+  openvide-daemon project scan --root <path> [--save]
+  openvide-daemon task list
+  openvide-daemon task get --id <id>
+  openvide-daemon task create --project <name> --title <title> [--tool claude|codex|gemini] [--github]
+  openvide-daemon task start --id <id> [--tool claude|codex|gemini] [--prepare]
+  openvide-daemon task attach --task-id <id> --session-id <session-id>
+  openvide-daemon task attach-native --task-id <id> --tool <codex|claude> --resume-id <id> --cwd <path> [--send-context]
+  openvide-daemon task import-native --project <name> --tool <codex|claude> --resume-id <id> --title <title> --cwd <path>
+  openvide-daemon task complete --id <id> [--summary <text>] [--close-issue]
+  openvide-daemon task block --id <id> --reason <reason>
+  openvide-daemon codex <project> <task>
+  openvide-daemon claude <project> <task>
+  openvide-daemon brief generate
+  openvide-daemon brief list
+  openvide-daemon pr prepare --task-id <id> [--base main] [--draft]
+  openvide-daemon pr create --task-id <id> [--base main] [--draft]
+  openvide-daemon sync [--dry-run]
+  openvide-daemon decision add --project <name> --text <decision>
+  openvide-daemon workflow config get
+  openvide-daemon workflow config set [--workspace-root <path>] [--github-enabled true|false] [--github-default-owner <owner>] [--github-auto-create-issues true|false] [--notion-enabled true|false] [--notion-tasks-database-id <id>] [--notion-briefings-database-id <id>] [--notion-decisions-database-id <id>] [--notion-sessions-database-id <id>]
   openvide-daemon bridge enable [--port 7842] [--no-tls]
   openvide-daemon bridge disable
   openvide-daemon bridge status
@@ -246,6 +268,24 @@ async function main(): Promise<void> {
     return;
   }
 
+  // ── workflow shortcuts ──
+  if (command === "codex" || command === "claude") {
+    const project = args[1];
+    const title = args.slice(2).join(" ").trim();
+    if (!project || !title) {
+      failJson(`Usage: openvide-daemon ${command} <project> <task>`);
+    }
+    ensureDaemon();
+    const res = await sendCommand({
+      cmd: "workflow.shortcut",
+      tool: command,
+      project,
+      title,
+    }, LONG_IPC_TIMEOUT_MS);
+    printJson(res);
+    return;
+  }
+
   // ── config subcommands ──
   if (command === "config") {
     const sub = args[1];
@@ -418,6 +458,337 @@ async function main(): Promise<void> {
 
       default:
         failJson(`Unknown prompt subcommand: ${sub}`);
+    }
+  }
+
+  // ── workflow config subcommands ──
+  if (command === "workflow") {
+    const sub = args[1];
+    if (!sub) failJson("Missing workflow subcommand");
+
+    if (sub !== "config") {
+      failJson(`Unknown workflow subcommand: ${sub}`);
+    }
+
+    const action = args[2];
+    if (!action) failJson("Missing workflow config subcommand");
+    const flags = parseArgs(args.slice(3));
+
+    switch (action) {
+      case "get": {
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "workflow.config.get" });
+        printJson(res);
+        return;
+      }
+
+      case "set": {
+        const req: IpcRequest = { cmd: "workflow.config.set" };
+        if (flags.has("workspace-root")) req.workspaceRoot = flags.get("workspace-root");
+        if (flags.has("github-enabled")) req.githubEnabled = parseBooleanFlag(flags.get("github-enabled"), "--github-enabled");
+        if (flags.has("github-default-owner")) req.githubDefaultOwner = flags.get("github-default-owner");
+        if (flags.has("github-auto-create-issues")) req.githubAutoCreateIssues = parseBooleanFlag(flags.get("github-auto-create-issues"), "--github-auto-create-issues");
+        if (flags.has("notion-enabled")) req.notionEnabled = parseBooleanFlag(flags.get("notion-enabled"), "--notion-enabled");
+        if (flags.has("notion-tasks-database-id")) req.notionTasksDatabaseId = flags.get("notion-tasks-database-id");
+        if (flags.has("notion-briefings-database-id")) req.notionBriefingsDatabaseId = flags.get("notion-briefings-database-id");
+        if (flags.has("notion-decisions-database-id")) req.notionDecisionsDatabaseId = flags.get("notion-decisions-database-id");
+        if (flags.has("notion-sessions-database-id")) req.notionSessionsDatabaseId = flags.get("notion-sessions-database-id");
+        ensureDaemon();
+        const res = await sendCommand(req);
+        printJson(res);
+        return;
+      }
+
+      default:
+        failJson(`Unknown workflow config subcommand: ${action}`);
+    }
+  }
+
+  // ── project subcommands ──
+  if (command === "project") {
+    const sub = args[1];
+    if (!sub) failJson("Missing project subcommand");
+    const flags = parseArgs(args.slice(2));
+
+    switch (sub) {
+      case "list": {
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "project.list" });
+        printJson(res);
+        return;
+      }
+
+      case "add": {
+        const name = flags.get("name");
+        const projectPath = flags.get("path");
+        if (!name || !projectPath) failJson("--name and --path are required");
+        ensureDaemon();
+        const res = await sendCommand({
+          cmd: "project.add",
+          name,
+          path: projectPath,
+          github: flags.get("github"),
+          priority: flags.get("priority"),
+          type: flags.get("type"),
+        }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
+      case "scan": {
+        const root = flags.get("root");
+        if (!root) failJson("--root is required");
+        ensureDaemon();
+        const res = await sendCommand({
+          cmd: "project.scan",
+          root,
+          save: flags.has("save"),
+        }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
+      default:
+        failJson(`Unknown project subcommand: ${sub}`);
+    }
+  }
+
+  // ── task subcommands ──
+  if (command === "task") {
+    const sub = args[1];
+    if (!sub) failJson("Missing task subcommand");
+    const flags = parseArgs(args.slice(2));
+
+    switch (sub) {
+      case "list": {
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "task.list" });
+        printJson(res);
+        return;
+      }
+
+      case "get": {
+        const id = flags.get("id");
+        if (!id) failJson("--id is required");
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "task.get", id });
+        printJson(res);
+        return;
+      }
+
+      case "create": {
+        const project = flags.get("project");
+        const title = flags.get("title");
+        if (!project || !title) failJson("--project and --title are required");
+        const tool = flags.get("tool");
+        if (tool && tool !== "claude" && tool !== "codex" && tool !== "gemini") {
+          failJson("--tool must be claude, codex, or gemini");
+        }
+        ensureDaemon();
+        const res = await sendCommand({
+          cmd: "task.create",
+          project,
+          title,
+          tool,
+          github: flags.has("github") ? true : undefined,
+        }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
+      case "start": {
+        const id = flags.get("id");
+        if (!id) failJson("--id is required");
+        const tool = flags.get("tool");
+        if (tool && tool !== "claude" && tool !== "codex" && tool !== "gemini") {
+          failJson("--tool must be claude, codex, or gemini");
+        }
+        ensureDaemon();
+        const res = await sendCommand({
+          cmd: "task.start",
+          id,
+          tool,
+          prepare: flags.has("prepare"),
+        }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
+      case "attach": {
+        const taskId = flags.get("task-id");
+        const sessionId = flags.get("session-id");
+        if (!taskId || !sessionId) failJson("--task-id and --session-id are required");
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "task.attach", taskId, sessionId });
+        printJson(res);
+        return;
+      }
+
+      case "attach-native": {
+        const taskId = flags.get("task-id");
+        const tool = flags.get("tool");
+        const resumeId = flags.get("resume-id");
+        const cwd = flags.get("cwd");
+        if (!taskId || !tool || !resumeId || !cwd) failJson("--task-id, --tool, --resume-id, and --cwd are required");
+        if (tool !== "codex" && tool !== "claude") failJson("--tool must be codex or claude");
+        ensureDaemon();
+        const res = await sendCommand({
+          cmd: "task.attach_native",
+          taskId,
+          tool,
+          resumeId,
+          cwd,
+          sendContext: flags.has("send-context"),
+        }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
+      case "import-native": {
+        const project = flags.get("project");
+        const tool = flags.get("tool");
+        const resumeId = flags.get("resume-id");
+        const title = flags.get("title");
+        const cwd = flags.get("cwd");
+        if (!project || !tool || !resumeId || !title || !cwd) {
+          failJson("--project, --tool, --resume-id, --title, and --cwd are required");
+        }
+        if (tool !== "codex" && tool !== "claude") failJson("--tool must be codex or claude");
+        ensureDaemon();
+        const res = await sendCommand({
+          cmd: "task.import_native",
+          project,
+          tool,
+          resumeId,
+          title,
+          cwd,
+        }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
+      case "complete": {
+        const id = flags.get("id");
+        if (!id) failJson("--id is required");
+        ensureDaemon();
+        const res = await sendCommand({
+          cmd: "task.complete",
+          id,
+          summary: flags.get("summary"),
+          closeIssue: flags.has("close-issue"),
+        }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
+      case "block": {
+        const id = flags.get("id");
+        const reason = flags.get("reason");
+        if (!id || !reason) failJson("--id and --reason are required");
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "task.block", id, reason });
+        printJson(res);
+        return;
+      }
+
+      default:
+        failJson(`Unknown task subcommand: ${sub}`);
+    }
+  }
+
+  // ── brief subcommands ──
+  if (command === "brief") {
+    const sub = args[1];
+    if (!sub) failJson("Missing brief subcommand");
+
+    switch (sub) {
+      case "generate": {
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "brief.generate" }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
+      case "list": {
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "brief.list" });
+        printJson(res);
+        return;
+      }
+
+      default:
+        failJson(`Unknown brief subcommand: ${sub}`);
+    }
+  }
+
+  // ── pull request workflow subcommands ──
+  if (command === "pr") {
+    const sub = args[1];
+    if (!sub) failJson("Missing pr subcommand");
+    const flags = parseArgs(args.slice(2));
+
+    switch (sub) {
+      case "prepare": {
+        const taskId = flags.get("task-id");
+        if (!taskId) failJson("--task-id is required");
+        ensureDaemon();
+        const res = await sendCommand({
+          cmd: "pr.prepare",
+          taskId,
+          base: flags.get("base") ?? "main",
+          draft: flags.has("draft"),
+        });
+        printJson(res);
+        return;
+      }
+
+      case "create": {
+        const taskId = flags.get("task-id");
+        if (!taskId) failJson("--task-id is required");
+        ensureDaemon();
+        const res = await sendCommand({
+          cmd: "pr.create",
+          taskId,
+          base: flags.get("base") ?? "main",
+          draft: flags.has("draft"),
+        }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
+      default:
+        failJson(`Unknown pr subcommand: ${sub}`);
+    }
+  }
+
+  // ── workflow sync ──
+  if (command === "sync") {
+    const flags = parseArgs(args.slice(1));
+    ensureDaemon();
+    const res = await sendCommand({ cmd: "workflow.sync", dryRun: flags.has("dry-run") }, LONG_IPC_TIMEOUT_MS);
+    printJson(res);
+    return;
+  }
+
+  // ── decisions ──
+  if (command === "decision") {
+    const sub = args[1];
+    if (!sub) failJson("Missing decision subcommand");
+    const flags = parseArgs(args.slice(2));
+
+    switch (sub) {
+      case "add": {
+        const project = flags.get("project");
+        const text = flags.get("text");
+        if (!project || !text) failJson("--project and --text are required");
+        ensureDaemon();
+        const res = await sendCommand({ cmd: "decision.add", project, text }, LONG_IPC_TIMEOUT_MS);
+        printJson(res);
+        return;
+      }
+
+      default:
+        failJson(`Unknown decision subcommand: ${sub}`);
     }
   }
 

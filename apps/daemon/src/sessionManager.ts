@@ -18,6 +18,14 @@ import type {
 const runningProcesses = new Map<string, RunningProcess>();
 let state: DaemonState = { version: 1, sessions: {} };
 
+type SessionLifecycleEvent = {
+  session: SessionRecord;
+  previousStatus?: SessionStatus;
+  status: SessionStatus;
+};
+
+const lifecycleListeners = new Set<(event: SessionLifecycleEvent) => void>();
+
 const BUILT_IN_PROMPTS: PromptRecord[] = [
   {
     id: "builtin_explain",
@@ -87,6 +95,8 @@ interface SessionCreationMeta {
   scheduleName?: string;
   teamId?: string;
   teamName?: string;
+  workflowTaskId?: string;
+  workflowTaskTitle?: string;
 }
 
 function extractLastProviderError(sessionId: string): string | undefined {
@@ -198,6 +208,20 @@ export function persist(): void {
   saveState(state);
 }
 
+export function registerSessionLifecycleListener(listener: (event: SessionLifecycleEvent) => void): void {
+  lifecycleListeners.add(listener);
+}
+
+function emitSessionLifecycle(event: SessionLifecycleEvent): void {
+  for (const listener of lifecycleListeners) {
+    try {
+      listener(event);
+    } catch (err) {
+      logError("Session lifecycle listener failed:", err instanceof Error ? err.message : String(err));
+    }
+  }
+}
+
 // ── Prompt library ──
 
 export function listPrompts(): PromptRecord[] {
@@ -272,6 +296,8 @@ export function createSession(
     scheduleName: metadata?.scheduleName,
     teamId: metadata?.teamId,
     teamName: metadata?.teamName,
+    workflowTaskId: metadata?.workflowTaskId,
+    workflowTaskTitle: metadata?.workflowTaskTitle,
     workingDirectory,
     model,
     autoAccept,
@@ -296,7 +322,7 @@ export function getSession(id: string): SessionRecord | undefined {
 
 export function updateSession(
   id: string,
-  updates: Partial<Pick<SessionRecord, "workingDirectory" | "model" | "runKind" | "teamId" | "teamName" | "scheduleId" | "scheduleName">>,
+  updates: Partial<Pick<SessionRecord, "workingDirectory" | "model" | "runKind" | "teamId" | "teamName" | "scheduleId" | "scheduleName" | "workflowTaskId" | "workflowTaskTitle">>,
 ): SessionRecord | undefined {
   const session = state.sessions[id];
   if (!session) return undefined;
@@ -442,6 +468,8 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
         session.executionBackend = "cli";
       }
 
+      const previousStatus = session.status;
+
       // State transition
       if (session.status === "cancelled") {
         // Already cancelled — keep cancelled status
@@ -460,6 +488,11 @@ export function sendTurn(id: string, prompt: string, turnOpts?: { mode?: string;
 
       session.updatedAt = nowISO();
       persist();
+      emitSessionLifecycle({
+        session: { ...session },
+        previousStatus,
+        status: session.status,
+      });
 
       // Send push notification if token is registered and session completed or failed
       if (state.pushToken && (session.status === "idle" || session.status === "failed")) {

@@ -2,7 +2,7 @@
   "package_id": "com.openvide.g2",
   "edition": "202601",
   "name": "open-vide",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "min_sdk_version": "0.0.10",
   "min_app_version": "0.1.2",
   "tagline": "Glanceable HUD for dev workflows",

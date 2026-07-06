@@ -44,6 +44,8 @@ export interface SessionRecord {
   scheduleName?: string;
   teamId?: string;
   teamName?: string;
+  workflowTaskId?: string;
+  workflowTaskTitle?: string;
   pendingRemoval?: boolean;
   conversationId?: string;
   workingDirectory: string;
@@ -151,8 +153,126 @@ export interface DaemonState {
   bridge?: BridgeConfig;
   teams?: Record<string, TeamConfig>;
   schedules?: Record<string, ScheduledTask>;
+  workflowConfig?: WorkflowConfig;
+  workflowProjects?: Record<string, WorkflowProject>;
+  workflowTasks?: Record<string, WorkflowTask>;
+  workflowDecisions?: Record<string, WorkflowDecision>;
+  workflowBriefings?: Record<string, WorkflowBriefing>;
+  workflowEvents?: WorkflowEvent[];
   /** IDs of native sessions (e.g. "codex:abc123", "claude:xyz") that the user has dismissed from the list. */
   dismissedNativeIds?: string[];
+}
+
+// ── Workflow Control Plane ──
+
+export type WorkflowPriority = "low" | "medium" | "high";
+export type WorkflowTaskStatus =
+  | "draft"
+  | "ready"
+  | "running"
+  | "blocked"
+  | "needs-review"
+  | "done";
+
+export type WorkflowTaskSource = "manual" | "github" | "notion" | "briefing" | "session";
+export type WorkflowExternalProvider = "github" | "notion";
+export type WorkflowExternalKind = "issue" | "pull-request" | "task" | "briefing" | "session" | "decision";
+export type WorkflowSyncStatus = "pending" | "synced" | "failed";
+
+export interface WorkflowProject {
+  id: string;
+  name: string;
+  path: string;
+  github?: string;
+  priority: WorkflowPriority;
+  type?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowExternalLink {
+  provider: WorkflowExternalProvider;
+  kind: WorkflowExternalKind;
+  id?: string;
+  number?: number;
+  url?: string;
+  status: WorkflowSyncStatus;
+  error?: string;
+  updatedAt: string;
+}
+
+export interface WorkflowTask {
+  id: string;
+  title: string;
+  goal: string;
+  context?: string;
+  projectId?: string;
+  repoPath?: string;
+  githubRepo?: string;
+  status: WorkflowTaskStatus;
+  source: WorkflowTaskSource;
+  tool: Tool;
+  sessionIds: string[];
+  externalLinks: WorkflowExternalLink[];
+  acceptanceCriteria: string[];
+  outOfScope: string[];
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  summary?: string;
+}
+
+export interface WorkflowBriefing {
+  id: string;
+  date: string;
+  title: string;
+  markdown: string;
+  path?: string;
+  externalLinks: WorkflowExternalLink[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowDecision {
+  id: string;
+  projectId?: string;
+  projectName?: string;
+  text: string;
+  externalLinks: WorkflowExternalLink[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowEvent {
+  id: string;
+  type: string;
+  entityType: "project" | "task" | "briefing" | "decision" | "session" | "integration";
+  entityId: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface WorkflowConfig {
+  workspaceRoot?: string;
+  github?: {
+    enabled?: boolean;
+    defaultOwner?: string;
+    autoCreateIssues?: boolean;
+  };
+  notion?: {
+    enabled?: boolean;
+    tasksDatabaseId?: string;
+    briefingsDatabaseId?: string;
+    decisionsDatabaseId?: string;
+    sessionsDatabaseId?: string;
+  };
+}
+
+export interface WorkflowPullRequestDraft {
+  title: string;
+  body: string;
+  base: string;
+  draft: boolean;
 }
 
 // ── Output JSONL ──
@@ -260,6 +380,19 @@ export interface IpcResponse {
   bridgeStatus?: { enabled: boolean; port: number; tls: boolean; bindHost: string; connections: number };
   bridgeConfig?: BridgeConfigSnapshot;
   qrLines?: string[];
+  workflowConfig?: WorkflowConfig;
+  workflowProjects?: WorkflowProject[];
+  workflowProject?: WorkflowProject;
+  workflowTasks?: WorkflowTask[];
+  workflowTask?: WorkflowTask;
+  workflowDecision?: WorkflowDecision;
+  workflowDecisions?: WorkflowDecision[];
+  workflowBriefing?: WorkflowBriefing;
+  workflowBriefings?: WorkflowBriefing[];
+  workflowEvents?: WorkflowEvent[];
+  workflowPrompt?: string;
+  pullRequest?: WorkflowPullRequestDraft;
+  syncResults?: Array<{ target: string; ok: boolean; message?: string; error?: string }>;
 }
 
 // ── Normalized Events & Snapshots ──

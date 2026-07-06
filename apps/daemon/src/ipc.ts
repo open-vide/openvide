@@ -15,6 +15,7 @@ import { detectTailscaleIp, detectTailscaleHostname, getTailscaleTls } from "./c
 import { encodeQR } from "./qrText.js";
 import * as tm from "./teamManager.js";
 import * as sched from "./scheduleManager.js";
+import * as wf from "./workflowManager.js";
 
 const SOCKET_NAME = "daemon.sock";
 
@@ -174,6 +175,213 @@ export async function routeCommand(req: IpcRequest): Promise<IpcResponse> {
         return { ok: false, error: `Prompt ${id} not found` };
       }
       return { ok: true, prompts: sm.listPrompts() };
+    }
+
+    // ── Workflow control plane commands ──
+
+    case "workflow.config.get": {
+      return { ok: true, workflowConfig: wf.getWorkflowConfig() };
+    }
+
+    case "workflow.config.set": {
+      const config = wf.updateWorkflowConfig({
+        workspaceRoot: typeof req.workspaceRoot === "string" ? req.workspaceRoot : undefined,
+        githubEnabled: typeof req.githubEnabled === "boolean" ? req.githubEnabled : undefined,
+        githubDefaultOwner: typeof req.githubDefaultOwner === "string" ? req.githubDefaultOwner : undefined,
+        githubAutoCreateIssues: typeof req.githubAutoCreateIssues === "boolean" ? req.githubAutoCreateIssues : undefined,
+        notionEnabled: typeof req.notionEnabled === "boolean" ? req.notionEnabled : undefined,
+        notionTasksDatabaseId: typeof req.notionTasksDatabaseId === "string" ? req.notionTasksDatabaseId : undefined,
+        notionBriefingsDatabaseId: typeof req.notionBriefingsDatabaseId === "string" ? req.notionBriefingsDatabaseId : undefined,
+        notionDecisionsDatabaseId: typeof req.notionDecisionsDatabaseId === "string" ? req.notionDecisionsDatabaseId : undefined,
+        notionSessionsDatabaseId: typeof req.notionSessionsDatabaseId === "string" ? req.notionSessionsDatabaseId : undefined,
+      });
+      return { ok: true, workflowConfig: config };
+    }
+
+    case "project.list": {
+      return { ok: true, workflowProjects: wf.listProjects() };
+    }
+
+    case "project.add": {
+      const name = typeof req.name === "string" ? req.name.trim() : "";
+      const projectPath = typeof req.path === "string" ? req.path.trim() : "";
+      if (!name || !projectPath) return { ok: false, error: "Missing required: name, path" };
+      const priority = req.priority === "low" || req.priority === "medium" || req.priority === "high"
+        ? req.priority
+        : undefined;
+      const project = await wf.addProject({
+        name,
+        path: projectPath,
+        github: typeof req.github === "string" ? req.github.trim() : undefined,
+        priority,
+        type: typeof req.type === "string" ? req.type.trim() : undefined,
+      });
+      return { ok: true, workflowProject: project };
+    }
+
+    case "project.scan": {
+      const root = typeof req.root === "string" ? req.root.trim() : "";
+      if (!root) return { ok: false, error: "Missing required: root" };
+      const projects = await wf.scanProjects(root, req.save === true);
+      return { ok: true, workflowProjects: projects };
+    }
+
+    case "task.list": {
+      return { ok: true, workflowTasks: wf.listWorkflowTasks() };
+    }
+
+    case "task.get": {
+      const id = typeof req.id === "string" ? req.id.trim() : "";
+      if (!id) return { ok: false, error: "Missing required: id" };
+      const task = wf.getWorkflowTask(id);
+      if (!task) return { ok: false, error: `Task ${id} not found` };
+      return { ok: true, workflowTask: task };
+    }
+
+    case "task.create": {
+      const project = typeof req.project === "string" ? req.project.trim() : "";
+      const title = typeof req.title === "string" ? req.title.trim() : "";
+      const tool = req.tool as Tool | undefined;
+      if (!project || !title) return { ok: false, error: "Missing required: project, title" };
+      if (tool && tool !== "claude" && tool !== "codex" && tool !== "gemini") {
+        return { ok: false, error: "Invalid tool. Expected claude, codex, or gemini." };
+      }
+      const task = await wf.createWorkflowTask({
+        project,
+        title,
+        tool,
+        createGithubIssue: typeof req.github === "boolean" ? req.github : undefined,
+      });
+      return { ok: true, workflowTask: task };
+    }
+
+    case "task.start": {
+      const id = typeof req.id === "string" ? req.id.trim() : "";
+      const tool = req.tool as Tool | undefined;
+      if (!id) return { ok: false, error: "Missing required: id" };
+      if (tool && tool !== "claude" && tool !== "codex" && tool !== "gemini") {
+        return { ok: false, error: "Invalid tool. Expected claude, codex, or gemini." };
+      }
+      const result = await wf.startWorkflowTask({
+        id,
+        tool,
+        prepare: req.prepare === true,
+      });
+      return { ok: true, workflowTask: result.task, session: result.session, workflowPrompt: result.prompt };
+    }
+
+    case "task.attach": {
+      const taskId = typeof req.taskId === "string" ? req.taskId.trim() : "";
+      const sessionId = typeof req.sessionId === "string" ? req.sessionId.trim() : "";
+      if (!taskId || !sessionId) return { ok: false, error: "Missing required: taskId, sessionId" };
+      const task = wf.attachWorkflowTask({ taskId, sessionId });
+      return { ok: true, workflowTask: task };
+    }
+
+    case "task.attach_native": {
+      const taskId = typeof req.taskId === "string" ? req.taskId.trim() : "";
+      const tool = req.tool as "codex" | "claude" | undefined;
+      const resumeId = typeof req.resumeId === "string" ? req.resumeId.trim() : "";
+      const cwd = typeof req.cwd === "string" ? req.cwd.trim() : "";
+      if (!taskId || !tool || !resumeId || !cwd) return { ok: false, error: "Missing required: taskId, tool, resumeId, cwd" };
+      if (tool !== "codex" && tool !== "claude") return { ok: false, error: "Invalid tool. Expected codex or claude." };
+      const result = wf.attachNativeWorkflowTask({
+        taskId,
+        tool,
+        resumeId,
+        cwd,
+        sendContext: req.sendContext === true,
+      });
+      return { ok: true, workflowTask: result.task, session: result.session, workflowPrompt: result.prompt };
+    }
+
+    case "task.import_native": {
+      const project = typeof req.project === "string" ? req.project.trim() : "";
+      const tool = req.tool as "codex" | "claude" | undefined;
+      const resumeId = typeof req.resumeId === "string" ? req.resumeId.trim() : "";
+      const title = typeof req.title === "string" ? req.title.trim() : "";
+      const cwd = typeof req.cwd === "string" ? req.cwd.trim() : "";
+      if (!project || !tool || !resumeId || !title || !cwd) {
+        return { ok: false, error: "Missing required: project, tool, resumeId, title, cwd" };
+      }
+      if (tool !== "codex" && tool !== "claude") return { ok: false, error: "Invalid tool. Expected codex or claude." };
+      const result = await wf.importNativeWorkflowTask({ project, tool, resumeId, title, cwd });
+      return { ok: true, workflowTask: result.task, session: result.session, workflowPrompt: result.prompt };
+    }
+
+    case "task.complete": {
+      const id = typeof req.id === "string" ? req.id.trim() : "";
+      if (!id) return { ok: false, error: "Missing required: id" };
+      const task = await wf.completeWorkflowTask({
+        id,
+        summary: typeof req.summary === "string" ? req.summary : undefined,
+        closeIssue: req.closeIssue === true,
+      });
+      return { ok: true, workflowTask: task };
+    }
+
+    case "task.block": {
+      const id = typeof req.id === "string" ? req.id.trim() : "";
+      const reason = typeof req.reason === "string" ? req.reason.trim() : "";
+      if (!id || !reason) return { ok: false, error: "Missing required: id, reason" };
+      const task = wf.blockWorkflowTask({ id, reason });
+      return { ok: true, workflowTask: task };
+    }
+
+    case "workflow.shortcut": {
+      const project = typeof req.project === "string" ? req.project.trim() : "";
+      const title = typeof req.title === "string" ? req.title.trim() : "";
+      const tool = req.tool as Tool | undefined;
+      if (!project || !title || !tool) return { ok: false, error: "Missing required: project, title, tool" };
+      if (tool !== "claude" && tool !== "codex" && tool !== "gemini") {
+        return { ok: false, error: "Invalid tool. Expected claude, codex, or gemini." };
+      }
+      const result = await wf.createAndStartWorkflowTask({ project, title, tool });
+      return { ok: true, workflowTask: result.task, session: result.session, workflowPrompt: result.prompt };
+    }
+
+    case "brief.generate": {
+      const briefing = await wf.generateBriefing();
+      return { ok: true, workflowBriefing: briefing };
+    }
+
+    case "brief.list": {
+      return { ok: true, workflowBriefings: wf.listBriefings() };
+    }
+
+    case "pr.prepare": {
+      const taskId = typeof req.taskId === "string" ? req.taskId.trim() : "";
+      if (!taskId) return { ok: false, error: "Missing required: taskId" };
+      const pr = wf.preparePullRequest(
+        taskId,
+        typeof req.base === "string" ? req.base : "main",
+        req.draft !== false,
+      );
+      return { ok: true, pullRequest: pr };
+    }
+
+    case "pr.create": {
+      const taskId = typeof req.taskId === "string" ? req.taskId.trim() : "";
+      if (!taskId) return { ok: false, error: "Missing required: taskId" };
+      const task = await wf.createPullRequest(
+        taskId,
+        typeof req.base === "string" ? req.base : "main",
+        req.draft === true,
+      );
+      return { ok: true, workflowTask: task };
+    }
+
+    case "workflow.sync": {
+      const results = await wf.syncWorkflow(req.dryRun === true);
+      return { ok: true, syncResults: results };
+    }
+
+    case "decision.add": {
+      const project = typeof req.project === "string" ? req.project.trim() : "";
+      const text = typeof req.text === "string" ? req.text.trim() : "";
+      if (!project || !text) return { ok: false, error: "Missing required: project, text" };
+      const decision = await wf.addDecision({ project, text });
+      return { ok: true, workflowDecision: decision };
     }
 
     case "session.create": {
